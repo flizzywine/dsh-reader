@@ -55,8 +55,11 @@ library/<书名>/总结/0001 ….md    Agent 写的总结，可以手改
 | `read_chapter(n, offset?)` | 读第 n 节原文，每次最多 1.2 万字，长章节用 offset 翻页 |
 | `save_summary(n, summary)` | 把第 n 节的总结写进 `总结/` 文件夹（覆盖旧的） |
 | `read_summaries(from, to)` | 批量读总结，用来回顾前情 |
+| `show_passage(n, quote)` | 让阅读区跳到第 n 节，高亮并滚动到这段原文；原文对不上就报错、不跳转 |
 
 总结由主 Agent 自己读完原文后写。
+
+你说「带我去看某段情节」时，Agent 先用 grep 或 `read_chapter` 找到原文，再调 `show_passage`。阅读页对当前对话的绑定做长轮询（`/api/dsh-reader/watch`），所以工具一执行，中间就会跳过去。自己翻页时高亮会清掉。
 
 ## Agent 怎么知道你在读什么
 

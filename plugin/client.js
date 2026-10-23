@@ -43,6 +43,8 @@ window.__ModuleLoader__.load({
 .dr-page{flex:1;overflow:auto;min-height:0}
 .dr-text{max-width:720px;margin:0 auto;padding:32px 24px 96px;font-size:17px;line-height:1.9;white-space:pre-wrap;word-break:break-word}
 .dr-text h2{font-size:22px;margin:0 0 24px;white-space:normal}
+.dr-text mark{color:inherit;background:rgba(255,196,0,.28);border-radius:3px;padding:1px 0;box-shadow:0 0 0 2px rgba(255,196,0,.28);animation:dr-flash 1.6s ease-out 2}
+@keyframes dr-flash{0%{background:rgba(255,196,0,.6)}100%{background:rgba(255,196,0,.28)}}
 .dr-lib{height:100%;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary)}
 .dr-lib-head{display:flex;align-items:flex-start;gap:8px}
 .dr-lib-head>div{flex:1}
@@ -177,6 +179,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           })
         },
         bind: (sessionId, patch) => rpc('bind', { sessionId, binding: patch }).then((b) => set(sessionId, b)),
+        /** A change made elsewhere (the agent's show_passage), delivered by the watch loop. */
+        apply: set,
         close(sessionId) {
           // Unmount the side composer before the centre one takes the session's editor back.
           closeChat(sessionId)
@@ -451,15 +455,36 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                     current ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '为这本书新开一个对话', onClick: () => fresh(b.id) }, '新开') : null))))
     }
 
+    /**
+     * Split the displayed body around the agent's quote. The host gives the quote's offset in the chapter
+     * file; the body drops the heading line, so pick the occurrence nearest that offset.
+     */
+    function highlight(body, removed, anchor) {
+      if (!anchor?.quote) return [body, null]
+      let best = -1
+      for (let at = body.indexOf(anchor.quote); at >= 0; at = body.indexOf(anchor.quote, at + 1)) {
+        if (best < 0 || Math.abs(at + removed - anchor.at) < Math.abs(best + removed - anchor.at)) best = at
+      }
+      if (best < 0) return [body, null]
+      return [body.slice(0, best), h('mark', { key: anchor.nonce, 'data-dr-anchor': '' }, anchor.quote), body.slice(best + anchor.quote.length)]
+    }
+
     function Reader({ rpc, binding, onMove, onClose, onShowChat }) {
       const [toc, setToc] = useState(null)
       const [chapter, setChapter] = useState(null)
+      const page = useRef(null)
       const index = binding.chapter ?? 0
+      const anchor = binding.anchor ?? null
       useEffect(() => { rpc('toc', { bookId: binding.bookId }).then(setToc) }, [binding.bookId])
       useEffect(() => {
         setChapter(null)
         rpc('chapter', { bookId: binding.bookId, index }).then(setChapter)
       }, [binding.bookId, index])
+      // Bring the agent's passage to the middle of the page once its chapter is on screen.
+      useEffect(() => {
+        if (chapter === null || chapter.index !== index || !anchor) return
+        page.current?.querySelector('[data-dr-anchor]')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      }, [chapter, anchor?.nonce])
       const count = toc?.chapters.length ?? 0
       return h('div', { className: 'dr-root' },
         h('div', { className: 'dr-bar' },
@@ -471,15 +496,38 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('button', { type: 'button', className: 'dr-btn', disabled: index >= count - 1, onClick: () => onMove(index + 1) }, '下一章'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onShowChat }, '对话'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '合上')),
-        h('div', { className: 'dr-page', key: index },
+        h('div', { className: 'dr-page', key: index, ref: page },
           h('article', { className: 'dr-text' },
-            chapter === null ? '读取中…' : [h('h2', { key: 't' }, chapter.title), chapter.text.replace(/^[^\n]*\n/, '')])))
+            chapter === null || chapter.index !== index ? '读取中…' : (() => {
+              const body = chapter.text.replace(/^[^\n]*\n/, '')
+              return [h('h2', { key: 't' }, chapter.title), ...highlight(body, chapter.text.length - body.length, anchor)]
+            })())))
     }
 
     /** Centre occupant: the reader when the session has a book, otherwise the ordinary Conversation. */
     function ReaderCentre(props) {
       const { sessionId, app } = props
       const binding = useBinding(app.store, sessionId)
+
+      // Follow moves made by the agent (show_passage) while this session is open.
+      useEffect(() => {
+        if (sessionId === undefined) return
+        const controller = new AbortController()
+        ;(async () => {
+          let version
+          while (!controller.signal.aborted) {
+            try {
+              const result = await app.rpc('watch', { sessionId, version }, controller.signal)
+              if (result.changed) app.store.apply(sessionId, result.binding)
+              version = result.version
+            } catch {
+              if (controller.signal.aborted) return
+              await new Promise((resolve) => setTimeout(resolve, 3000))
+            }
+          }
+        })()
+        return () => controller.abort()
+      }, [sessionId])
 
       const reading = sessionId !== undefined && binding?.bookId
       // On a phone the side panel goes fullscreen, so let the reader stay in front until asked.
@@ -499,9 +547,9 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     return {
       inject: ['slots', 'sessions', 'workspaces', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
-        const rpc = async (endpoint, payload = {}) => {
+        const rpc = async (endpoint, payload = {}, signal) => {
           const res = await fetch(`${ROUTE}/${endpoint}`, {
-            method: 'POST', credentials: 'same-origin',
+            method: 'POST', credentials: 'same-origin', signal,
             headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
           })
           const body = await res.json()

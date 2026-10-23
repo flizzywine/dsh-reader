@@ -79,13 +79,10 @@ async function handleCall(endpoint, payload = {}) {
     case 'bindings':
       await migrateLibrary()
       return readBindings()
-    case 'bind': {
-      const all = await readBindings()
-      if (payload.binding === null) delete all[payload.sessionId]
-      else all[payload.sessionId] = nextBinding(all[payload.sessionId], payload.binding)
-      await writeJsonFile(BINDINGS, all)
-      return all[payload.sessionId] ?? null
-    }
+    case 'bind':
+      return updateBinding(payload.sessionId, payload.binding)
+    case 'watch':
+      return watchBinding(payload.sessionId, payload.version)
     case 'personas':
       return personaView((await readJsonFile(SETTINGS)).persona ?? {})
     case 'persona': {
@@ -129,12 +126,50 @@ async function readJson(req) {
  * `positions`, so switching back resumes where the user left off.
  */
 function nextBinding(previous = {}, patch) {
+  // Turning pages by hand drops the agent's highlight; only show_passage sets one.
+  if (patch.anchor === undefined) patch = { ...patch, anchor: null }
   const positions = { ...previous.positions }
   if (previous.bookId) positions[previous.bookId] = previous.chapter ?? 0
   const bookId = patch.bookId ?? previous.bookId
   const chapter = patch.chapter ?? (patch.bookId && patch.bookId !== previous.bookId ? positions[bookId] ?? 0 : previous.chapter ?? 0)
   positions[bookId] = chapter
   return { ...previous, ...patch, bookId, chapter, positions, updatedAt: Date.now() }
+}
+
+/** Change counter per session, so the reader page can long-poll for moves made by the agent. */
+const versions = new Map()
+const waiters = new Map()
+
+/** The one writer of bindings: the page, the agent's show_passage, and closing a book all go through here. */
+let writing = Promise.resolve()
+function updateBinding(sessionId, patch) {
+  const work = writing.then(async () => {
+    const all = await readBindings()
+    if (patch === null) delete all[sessionId]
+    else all[sessionId] = nextBinding(all[sessionId], patch)
+    await writeJsonFile(BINDINGS, all)
+    const version = (versions.get(sessionId) ?? 0) + 1
+    versions.set(sessionId, version)
+    for (const wake of waiters.get(sessionId) ?? []) wake()
+    waiters.delete(sessionId)
+    return all[sessionId] ?? null
+  })
+  writing = work.catch(() => {})
+  return work
+}
+
+/** Resolve once the session's binding moves past `version`, or after 25s with no change. */
+async function watchBinding(sessionId, version) {
+  const current = versions.get(sessionId) ?? 0
+  if (version === undefined || version !== current) return { version: current, binding: (await readBindings())[sessionId] ?? null, changed: version !== undefined }
+  await new Promise((resolve) => {
+    const timer = setTimeout(resolve, 25000)
+    const list = waiters.get(sessionId) ?? []
+    list.push(() => { clearTimeout(timer); resolve() })
+    waiters.set(sessionId, list)
+  })
+  const latest = versions.get(sessionId) ?? 0
+  return { version: latest, binding: (await readBindings())[sessionId] ?? null, changed: latest !== version }
 }
 
 /**
@@ -147,6 +182,7 @@ const READING_SECTION = [
   '- 读书工具都作用于当前这本书：book_toc 看目录和进度；read_chapter 一节一节读原文，不要一次读整本，也不要凭记忆复述。',
   '- 读完一节可以用 save_summary 写总结；回顾前情先用 read_summaries 读总结，不够再回原文。',
   `- 每本书是工作区里的一个文件夹：\`<书名>/${CHAPTER_DIR}/\` 是分好的章节，\`<书名>/${SUMMARY_DIR}/\` 是总结；跨章搜索可以直接 grep 章节目录。`,
+  '- 用户想看某段情节时，先用 grep 或 read_chapter 找到它，再用 show_passage 让阅读区跳过去并高亮。',
   '- 用户还没读到的部分算剧透：除非用户要求，不要透露当前节之后的情节。',
 ].join('\n')
 
@@ -205,7 +241,7 @@ export function apply(ctx) {
 
   // Tools are global (the tool list is part of the cached prefix); each one checks the session's book.
   ctx.inject(['tools'], (scope) => {
-    for (const tool of readingTools({ library: LIBRARY, bindingFor: async (sessionId) => (await readBindings())[sessionId] ?? null })) {
+    for (const tool of readingTools({ library: LIBRARY, bindingFor: async (sessionId) => (await readBindings())[sessionId] ?? null, updateBinding })) {
       scope.effect(() => scope.tools.register(tool), `dsh-reader: ${tool.name} tool`)
     }
   })

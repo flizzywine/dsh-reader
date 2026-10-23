@@ -22,13 +22,14 @@ function integer(args, name, fallback) {
  * @param {object} deps
  * @param {string} deps.library - library root.
  * @param {(sessionId: string) => Promise<{ bookId: string, chapter?: number } | null>} deps.bindingFor
+ * @param {(sessionId: string, patch: object) => Promise<object>} deps.updateBinding - moves the reader.
  */
-export function readingTools({ library, bindingFor }) {
+export function readingTools({ library, bindingFor, updateBinding }) {
   async function bookOf(exec) {
     const sessionId = exec?.agent?.session?.id
     const binding = sessionId ? await bindingFor(sessionId) : null
     if (!binding?.bookId) throw new Error('当前对话没有打开书，读书工具不可用')
-    return binding
+    return { ...binding, sessionId }
   }
 
   return [
@@ -68,6 +69,29 @@ export function readingTools({ library, bindingFor }) {
           ? `\n\n[本节共 ${chapter.text.length} 字，已读到 ${next}；继续读用 offset=${next}]`
           : '\n\n[本节已读完]'
         return `第 ${chapter.index + 1} 节 ${chapter.title}\n\n${page}${tail}`
+      },
+    },
+    {
+      name: 'show_passage',
+      description: '让用户的阅读区跳到第 n 节，并高亮、滚动到 quote 那一段。用户说想看某段情节时用：先用 grep 或 read_chapter 找到原文，再调用本工具。quote 必须从原文逐字照抄一小段（10～80 字，不跨段落），找不到会报错且不跳转。',
+      parameters: {
+        type: 'object',
+        properties: {
+          n: { type: 'integer', minimum: 1, description: '节序号，从 1 开始' },
+          quote: { type: 'string', minLength: 2, maxLength: 200, description: '要高亮的原文片段，逐字照抄' },
+        },
+        required: ['n', 'quote'],
+        additionalProperties: false,
+      },
+      output: text(),
+      async execute(args, exec) {
+        const { bookId, sessionId } = await bookOf(exec)
+        const chapter = await readChapter(library, bookId, integer(args, 'n') - 1)
+        const quote = String(args?.quote ?? '').trim()
+        const at = chapter.text.indexOf(quote)
+        if (!quote || at < 0) throw new Error(`第 ${chapter.index + 1} 节里找不到这段原文，没有跳转。请从 read_chapter 的结果里逐字复制一小段再试（不要改字、不要跨段落）。`)
+        await updateBinding(sessionId, { chapter: chapter.index, anchor: { quote, at, nonce: Date.now() } })
+        return `已在阅读区打开第 ${chapter.index + 1} 节「${chapter.title}」，并高亮：${quote}`
       },
     },
     {
