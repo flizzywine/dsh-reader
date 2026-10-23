@@ -21,4 +21,9 @@ JSON
 [ -f "$PROFILE/cordis.patch.yml" ] || printf '[]\n' > "$PROFILE/cordis.patch.yml"
 ln -sfn "$ROOT/plugin" "$PROFILE/node_modules/dsh-reader"
 echo "profile ready: $PROFILE"
-echo "start: dsh --profile reader"
+echo "start: dsh-reader start"
+
+# Put the service command beside `dsh` so `dsh-reader start|stop|restart|status|open` works anywhere.
+DSH_BIN=$(dirname "$(command -v dsh)")
+ln -sfn "$ROOT/bin/dsh-reader.mjs" "$DSH_BIN/dsh-reader"
+echo "command ready: dsh-reader start | stop | restart | status | open"

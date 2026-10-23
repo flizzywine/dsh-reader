@@ -4,12 +4,27 @@
 
 ## 启动
 
+第一次先跑一次：
+
 ```bash
 ./bin/setup-profile.sh
-dsh --profile reader
 ```
 
-第一次先跑 `setup-profile.sh`，它会在 `~/.dsh/profiles/reader` 建好 profile，并链接 `plugin/`。之后改插件代码不用重跑。
+它会在 `~/.dsh/profiles/reader` 建好 profile，链接 `plugin/`，并把 `dsh-reader` 命令放到 `dsh` 旁边。之后用法和 `dsh-tavern` 一样：
+
+```bash
+dsh-reader start      # 启动，并在浏览器打开（已在运行就直接打开）
+dsh-reader restart    # 改了宿主代码（plugin/*.js 里非 client.js 的部分）后重启，并重新打开页面
+dsh-reader stop
+dsh-reader status     # 是否在运行、访问地址
+dsh-reader open       # 页面关了，重新打开
+dsh-reader logs       # 最近的日志
+```
+
+- 端口固定为 `30160`，可以用 `DSH_READER_PORT` 改。
+- 日志和 PID 记录在 `~/.dsh/profile-data/reader/service.log`、`service.json`。
+- 每次启动 DSH 都会生成新的带 token 的地址。浏览器第一次用这个地址进来后会记住登录，之后直接开 `http://127.0.0.1:30160/` 也行，重启后刷新页面就能连上。
+- 改 `client.js` 不用重启，刷新页面即可；改宿主代码要 `dsh-reader restart`。
 
 ## 用法
 
