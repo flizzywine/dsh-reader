@@ -512,7 +512,9 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      */
     function tocRows(chapters) {
       let volume = null
-      return chapters.map((chapter, index) => {
+      // A host older than this page sends bare title strings; read both shapes.
+      return chapters.map((entry, index) => {
+        const chapter = typeof entry === 'string' ? { title: entry } : entry
         const match = VOLUME.exec(chapter.title)
         if (match) volume = match[1].trim()
         const full = match ? match[2] : chapter.title
@@ -610,6 +612,28 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
               return [h('h2', { key: 't' }, chapter.title), ...highlight(body, chapter.text.length - body.length, anchor)]
             })())),
         drawer ? h(TocDrawer, { rpc, bookId: binding.bookId, index, onPick: onMove, onClose: () => setDrawer(false) }) : null)
+    }
+
+    /**
+     * Keeps a reader error inside the reader. Without it a throw makes the slot runtime hand the centre
+     * back to ui-conversation while the 对话 tab stays open: two composers on one session.
+     */
+    class ReaderBoundary extends React.Component {
+      constructor(props) { super(props); this.state = { error: null } }
+      static getDerivedStateFromError(error) { return { error } }
+      componentDidCatch(error) { console.error('dsh-reader: reader crashed', error) }
+      render() {
+        if (this.state.error === null) return this.props.children
+        return h('div', { className: 'dr-root' }, h('div', { className: 'dr-pick', style: { padding: 32 } },
+          h('p', null, '阅读区出错了。'),
+          h('p', { className: 'dr-note' }, String(this.state.error?.message ?? this.state.error)),
+          h('p', { className: 'dr-note' }, '多半是刚升级、宿主还没重启：运行 dsh-reader restart 后再试。'),
+          h('button', { type: 'button', className: 'dr-btn', onClick: () => this.setState({ error: null }) }, '重试')))
+      }
+    }
+
+    function SafeReaderCentre(props) {
+      return h(ReaderBoundary, { key: props.sessionId }, h(ReaderCentre, props))
     }
 
     /** Centre occupant: the reader when the session has a book, otherwise the ordinary Conversation. */
@@ -730,7 +754,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           name: 'main.conversation',
           priority: SHADOW_PRIORITY,
           inject: () => ({ app }),
-        }, ReaderCentre)), 'dsh-reader: centre reader')
+        }, SafeReaderCentre)), 'dsh-reader: centre reader')
 
         ctx.effect(() => ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
           name: 'sidebar.workspaces',
