@@ -381,9 +381,10 @@ window.__ModuleLoader__.load({
       const binding = useBinding(app.store, sessionId)
       const [failure, setFailure] = useState(null)
       const current = binding?.bookId
-      // A session without a book can take one in place; otherwise a book gets its own new session.
-      const open = (bookId) => (current ? app.startReading(bookId) : app.store.bind(sessionId, { bookId, chapter: 0 }))
-        .catch((e) => setFailure(String(e?.message ?? e)))
+      // Switching keeps each book's place (the host remembers positions per book); 新开 starts a separate session.
+      const run = (work) => work.catch((e) => setFailure(String(e?.message ?? e)))
+      const here = (bookId) => run(app.store.bind(sessionId, { bookId }))
+      const fresh = (bookId) => run(app.startReading(bookId))
       return h('div', { className: 'dr-lib' },
         h('div', { className: 'dr-lib-head' },
           h('div', null,
@@ -401,7 +402,9 @@ window.__ModuleLoader__.load({
                     + (b.id === current ? ` · 读到第 ${(binding.chapter ?? 0) + 1} 节` : ''))),
                 b.id === current
                   ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => app.store.close(sessionId) }, '合上')
-                  : h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => open(b.id) }, current ? '新开阅读' : '打开'))))
+                  : h('div', { className: 'dr-side-row' },
+                    h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '在这个对话里换成这本书', onClick: () => here(b.id) }, current ? '换到这本' : '打开'),
+                    current ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '为这本书新开一个对话', onClick: () => fresh(b.id) }, '新开') : null))))
     }
 
     function Reader({ rpc, binding, onMove, onClose, onShowChat }) {

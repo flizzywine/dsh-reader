@@ -3,6 +3,7 @@
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises'
 import { dirname, join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { randomUUID } from 'node:crypto'
 import { CHAPTER_DIR, SUMMARY_DIR, listBooks, migrateFlatBooks, readChapter, readToc, safeName, writeBook } from './books.js'
 import { activePersonaText, managePersona, personaView } from './personas.js'
 import { readingTools } from './tools.js'
@@ -81,7 +82,7 @@ async function handleCall(endpoint, payload = {}) {
     case 'bind': {
       const all = await readBindings()
       if (payload.binding === null) delete all[payload.sessionId]
-      else all[payload.sessionId] = { ...all[payload.sessionId], ...payload.binding, updatedAt: Date.now() }
+      else all[payload.sessionId] = nextBinding(all[payload.sessionId], payload.binding)
       await writeJsonFile(BINDINGS, all)
       return all[payload.sessionId] ?? null
     }
@@ -123,14 +124,57 @@ async function readJson(req) {
 }
 
 /** The book a session reads, as stable system text: it changes only when the book does, so the prompt cache holds. */
-function bookSection(id, toc) {
-  return [
-    '# 正在读的书',
-    `用户在这个会话里读《${toc.title}》，共 ${toc.chapters.length} 节。用户在界面中间读书，你在右侧陪读。`,
-    '- 用 book_toc 看目录和用户读到哪一节；用 read_chapter 一节一节读原文，不要一次读整本，也不要凭记忆复述。',
-    '- 读完一节可以用 save_summary 写总结；回顾前情先用 read_summaries 读总结，不够再回原文。',
-    `- 文件都在工作区的 \`${id}/\` 下：\`${CHAPTER_DIR}/\` 是分好的章节，\`${SUMMARY_DIR}/\` 是总结，需要跨章搜索时可以直接 grep \`${id}/${CHAPTER_DIR}/\`。`,
-  ].join('\n')
+/**
+ * Apply a binding patch. A session may switch books; each book keeps its own place in
+ * `positions`, so switching back resumes where the user left off.
+ */
+function nextBinding(previous = {}, patch) {
+  const positions = { ...previous.positions }
+  if (previous.bookId) positions[previous.bookId] = previous.chapter ?? 0
+  const bookId = patch.bookId ?? previous.bookId
+  const chapter = patch.chapter ?? (patch.bookId && patch.bookId !== previous.bookId ? positions[bookId] ?? 0 : previous.chapter ?? 0)
+  positions[bookId] = chapter
+  return { ...previous, ...patch, bookId, chapter, positions, updatedAt: Date.now() }
+}
+
+/**
+ * How reading works, as system text. It names no book or chapter: those change while reading
+ * and arrive per turn (positionNote), so this section never breaks the prompt cache.
+ */
+const READING_SECTION = [
+  '# 陪读',
+  '用户在界面中间读书，你在右侧陪读。每轮用户消息后会附一条【阅读位置】，写明用户此刻在读哪本书、哪一节；以最新一条为准。一个对话通常只读一本书，也可能换书。',
+  '- 读书工具都作用于当前这本书：book_toc 看目录和进度；read_chapter 一节一节读原文，不要一次读整本，也不要凭记忆复述。',
+  '- 读完一节可以用 save_summary 写总结；回顾前情先用 read_summaries 读总结，不够再回原文。',
+  `- 每本书是工作区里的一个文件夹：\`<书名>/${CHAPTER_DIR}/\` 是分好的章节，\`<书名>/${SUMMARY_DIR}/\` 是总结；跨章搜索可以直接 grep 章节目录。`,
+  '- 用户还没读到的部分算剧透：除非用户要求，不要透露当前节之后的情节。',
+].join('\n')
+
+/** The per-turn note: which book and section the user is on right now. */
+async function positionNote(binding) {
+  const toc = await readToc(LIBRARY, binding.bookId)
+  const index = Math.min(binding.chapter ?? 0, toc.chapters.length - 1)
+  const chapter = toc.chapters[index]
+  return `【阅读位置】用户此刻在读《${toc.title}》第 ${index + 1}/${toc.chapters.length} 节「${chapter.title}」（文件 ${binding.bookId}/${CHAPTER_DIR}/${chapter.file}）。`
+}
+
+const POSITION_FORM = 'reading-position'
+
+/** Last note sent per session, for when the session's derived context cannot be read. */
+const announced = new Map()
+
+/** The session's current model context (after compaction), or [] if this DSH build does not expose it. */
+function contextMessages(session) {
+  try { return session?.deriveMessages?.() ?? [] } catch { return [] }
+}
+
+/** The text of the latest position note still in the request, if compaction has not dropped it. */
+function lastPositionNote(messages = []) {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i]
+    if (message?.source?.form === POSITION_FORM) return message.content?.[0]?.text
+  }
+  return undefined
 }
 
 function send(res, status, body) {
@@ -173,14 +217,31 @@ export function apply(ctx) {
     const binding = sessionId === undefined ? undefined : (await readBindings())[sessionId]
     if (!binding?.bookId) return assembly
     const persona = activePersonaText((await readJsonFile(SETTINGS)).persona ?? {})
-    const toc = await readToc(LIBRARY, binding.bookId)
     // Like tavern's card mode, a chosen persona replaces DSH's own identity; tool sections stay.
     const inherited = (assembly.sections ?? []).filter((section) => !persona || !REPLACED_BY_PERSONA.has(section.name))
     assembly.sections = [
       ...inherited,
       ...(persona ? [{ name: 'reader:persona', text: persona }] : []),
-      { name: 'reader:book', text: bookSection(binding.bookId, toc) },
+      { name: 'reader:reading', text: READING_SECTION },
     ]
     return assembly
+  })
+
+  // At the start of each reply, tell the agent where the user is reading. The note joins the history
+  // after the cached prefix (like tavern's variable changes) and is skipped while the latest one still
+  // says the same thing, so turning no page costs nothing.
+  ctx.on('agent/pre-step', async (payload, next) => {
+    const decision = await next()
+    if (decision.kind !== 'enter' || Number(payload.step) !== 1) return decision
+    const sessionId = payload.agent?.session?.id
+    const binding = sessionId === undefined ? undefined : (await readBindings())[sessionId]
+    if (!binding?.bookId) return decision
+    let note
+    try { note = await positionNote(binding) } catch { return decision }
+    const sent = lastPositionNote([...contextMessages(payload.agent.session), ...(payload.messages ?? []), ...decision.messages]) ?? announced.get(sessionId)
+    if (sent === note) return decision
+    announced.set(sessionId, note)
+    const message = { id: randomUUID(), role: 'user', content: [{ type: 'text', text: note }], source: { kind: 'plugin:dsh-reader', form: POSITION_FORM } }
+    return { ...decision, messages: [...decision.messages, message] }
   })
 }
