@@ -55,20 +55,42 @@ window.__ModuleLoader__.load({
 .dr-card-meta{font-size:12px;color:var(--dsw-alias-label-tertiary);margin-top:2px}
 .dr-strip{display:flex;align-items:center;gap:8px;padding:6px 16px;padding-left:max(16px,var(--dsh-frame-leading-clearance,0px));font-size:12px;color:var(--dsw-alias-label-tertiary);flex:none}
 .dr-chat{display:flex;flex-direction:column;height:100%;min-height:0}
-.dr-side{display:flex;flex-direction:column;gap:8px;padding:4px 12px 12px;min-height:0;flex:1;overflow:auto;color:var(--dsw-alias-label-primary);font-size:13px}
-.dr-side-rail{display:flex;flex-direction:column;align-items:center;gap:8px;padding:4px 0}
-.dr-side-row{display:flex;gap:6px}
-.dr-side-row .dr-btn{flex:1}
-.dr-side-label{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
-.dr-group-title{display:flex;align-items:center;gap:6px;padding:6px 4px;font-weight:600;cursor:pointer;border-radius:6px}
-.dr-group-title:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dr-group-count{margin-left:auto;font-weight:400;font-size:12px;color:var(--dsw-alias-label-tertiary)}
-.dr-entry{display:block;width:100%;text-align:left;border:none;background:transparent;color:inherit;font:inherit;padding:6px 8px 6px 20px;border-radius:6px;cursor:pointer}
-.dr-entry:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dr-entry-on{background:var(--dsw-alias-bg-module-platform)}
-.dr-entry small{display:block;font-size:11px;color:var(--dsw-alias-label-tertiary)}
-.dr-persona-row{display:flex;align-items:center;gap:6px;margin-top:auto;padding:8px 4px 0;border-top:.5px solid var(--dsw-alias-border-l2);font-size:12px;color:var(--dsw-alias-label-tertiary);cursor:pointer}
-.dr-persona-row b{color:var(--dsw-alias-label-primary);font-weight:500}
+.dr-side{height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:12px;min-height:0;overflow:auto;color:var(--dsw-alias-label-primary);font-size:13px;background:var(--dsw-specific-sidebar-fill)}
+.dr-side-head{height:56px;display:flex;align-items:center;gap:10px;flex:none;margin-right:40px;padding-left:4px}
+.dr-side-mark{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--dsw-alias-button-elevated-fill);border:1px solid var(--dsw-alias-border-l2)}
+.dr-side-name{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.dr-side-name b{font-size:17px;font-weight:750;letter-spacing:.2px;white-space:nowrap}
+.dr-side-name span{font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dr-side-new{height:40px;flex:none;border:1px solid var(--dsw-alias-border-l2);border-radius:11px;background:var(--dsw-alias-button-elevated-fill);color:inherit;cursor:pointer;font:inherit;font-weight:650}
+.dr-side-new:hover{background:var(--dsw-alias-button-floating-hover,var(--dsw-alias-interactive-bg-hover))}
+.dr-side-tools{display:grid;grid-template-columns:1fr 1fr;gap:4px;flex:none}
+.dr-side-tool{height:32px;display:flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;cursor:pointer}
+.dr-side-tool:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dr-side-tool:disabled{opacity:.5;cursor:wait}
+.dr-side-rail{height:100%;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 0}
+.dr-side-icon{width:34px;height:34px;border:0;border-radius:9px;background:transparent;color:inherit;cursor:pointer;display:grid;place-items:center}
+.dr-side-icon:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dr-side-label{display:flex;justify-content:space-between;align-items:center;margin:10px 4px 2px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dr-group-title{display:flex;align-items:center;gap:7px;width:100%;padding:9px 12px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dr-group-title:hover{background:rgba(128,128,128,.12)}
+.dr-group-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.dr-group-count{flex-shrink:0;opacity:.6;font-size:12px}
+.dr-group-items{padding-left:10px;display:flex;flex-direction:column;gap:4px}
+.dr-entry{display:block;width:100%;text-align:left;border:none;background:transparent;color:inherit;font:inherit;padding:7px 12px;border-radius:8px;cursor:pointer}
+.dr-entry:hover{background:rgba(128,128,128,.12)}
+.dr-entry-on{background:var(--dsw-alias-interactive-bg-hover)}
+.dr-entry-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dr-entry small{display:block;margin-top:2px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dr-persona-row{display:flex;align-items:center;gap:6px;margin-top:auto;padding:10px 6px 0;border-top:.5px solid var(--dsw-alias-border-l2);font-size:12px;color:var(--dsw-alias-label-tertiary);cursor:pointer;flex:none}
+.dr-persona-row b{margin-left:auto;color:var(--dsw-alias-label-primary);font-weight:500}
+/* Host chrome while the reader owns the sidebar, as dsh-tavern does: the reader's own button replaces
+   新建会话, the global panel row (插件/自动化任务) goes, and the host brand gives way to the reader's,
+   with the collapse button floating on the right of the same row. */
+body.dsh-reader-shell-active button[aria-label="新建会话"],body.dsh-reader-shell-active button[aria-label="New session"],
+body.dsh-reader-shell-active nav[aria-label="全局面板"],body.dsh-reader-shell-active nav[aria-label="Global panels"],
+body.dsh-reader-shell-active [class*="_logoRow"]>[class*="_brand"]{display:none!important}
+body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[class*="_regionArea"]>[data-slot="sidebar.workspaces"]>.dr-side){position:relative}
+body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[class*="_regionArea"]>[data-slot="sidebar.workspaces"]>.dr-side)>[class*="_logoRow"]{position:absolute;z-index:2;top:12px;right:12px;height:56px;margin:0;padding:0}
 .dr-overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px}
 .dr-dialog{width:min(640px,100%);max-height:min(720px,90vh);display:flex;flex-direction:column;gap:12px;padding:20px;border-radius:14px;background:var(--dsw-alias-bg-base,#1e1e1e);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2)}
 .dr-dialog-head{display:flex;align-items:center;gap:8px}
@@ -240,6 +262,18 @@ window.__ModuleLoader__.load({
                       starting === b.id ? '正在打开…' : '开始阅读')))))), document.body)
     }
 
+    /** Small line icons (16px, currentColor) for the sidebar. */
+    const ICONS = {
+      book: 'M4 4.5A1.5 1.5 0 0 1 5.5 3H12v12H5.5A1.5 1.5 0 0 0 4 16.5zM4 16.5A1.5 1.5 0 0 0 5.5 18H16V6M12 3h4v3',
+      import: 'M10 3v9M6.5 8.5 10 12l3.5-3.5M4 14v2.5h12V14',
+      shelf: 'M3.5 4v12M7 4v12M10.5 5l3.5 11M3 16.5h14',
+      plus: 'M10 4v12M4 10h12',
+    }
+    function Icon({ name, size = 16 }) {
+      return h('svg', { width: size, height: size, viewBox: '0 0 20 20', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
+        h('path', { d: ICONS[name] }))
+    }
+
     /** Left sidebar: replaces ui-workspace's browser, like tavern's sidebar. */
     function ReaderSidebar({ wide, expandSidebar, app }) {
       const [picking, setPicking] = useState(false)
@@ -250,10 +284,14 @@ window.__ModuleLoader__.load({
       const snapshot = useSyncExternalStore(app.sessions.list.subscribe, app.sessions.list.getSnapshot)
       const current = mainSessionId(snapshot)
       useEffect(() => { app.store.loadAll() }, [])
+      useEffect(() => {
+        document.body.classList.add('dsh-reader-shell-active')
+        return () => document.body.classList.remove('dsh-reader-shell-active')
+      }, [])
 
       if (!wide) {
         return h('div', { className: 'dr-side-rail' },
-          h('button', { type: 'button', className: 'dr-btn', title: '开始阅读', onClick: expandSidebar }, '＋'))
+          h('button', { type: 'button', className: 'dr-side-icon', title: '选择一本书 · 开始阅读', 'aria-label': '开始阅读', onClick: expandSidebar }, h(Icon, { name: 'plus', size: 18 })))
       }
 
       const titles = new Map((books ?? []).map((b) => [b.id, b.title]))
@@ -275,22 +313,28 @@ window.__ModuleLoader__.load({
       })
       const activePersona = persona?.items.find((item) => item.id === persona.activeId)
 
+      const total = ordered.reduce((n, group) => n + group.items.length, 0)
+
       return h('div', { className: 'dr-side' },
-        h('button', { type: 'button', className: 'dr-btn dr-btn-wide', onClick: () => setPicking(true) }, '＋ 选择一本书 · 开始阅读'),
-        h('div', { className: 'dr-side-row' },
-          h(ImportButton, { app, className: 'dr-btn dr-btn-line' }),
-          h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => app.openLibrary(current) }, '书库')),
-        h('div', { className: 'dr-side-label' }, h('span', null, '阅读历史')),
-        ordered.length === 0 ? h('p', { className: 'dr-note' }, '还没有读过的书。') : ordered.map((group) => h('div', { key: group.bookId },
-          h('div', { className: 'dr-group-title', onClick: () => toggle(group.bookId) },
-            h('span', null, closed.has(group.bookId) ? '▸' : '▾'),
-            h('span', null, titles.get(group.bookId) ?? group.bookId),
+        h('div', { className: 'dr-side-head' },
+          h('span', { className: 'dr-side-mark' }, h(Icon, { name: 'book', size: 17 })),
+          h('span', { className: 'dr-side-name' }, h('b', null, 'DSH 阅读器'), h('span', null, '书在中间 · 陪读在右边'))),
+        h('button', { type: 'button', className: 'dr-side-new', onClick: () => setPicking(true) }, '＋ 选择一本书 · 开始阅读'),
+        h('div', { className: 'dr-side-tools' },
+          h(ImportButton, { app, className: 'dr-side-tool', label: [h(Icon, { key: 'i', name: 'import' }), '导入新书'] }),
+          h('button', { type: 'button', className: 'dr-side-tool', onClick: () => app.openLibrary(current) }, h(Icon, { name: 'shelf' }), '书库')),
+        h('div', { className: 'dr-side-label' }, h('span', null, '阅读历史'), total ? h('span', null, total) : null),
+        ordered.length === 0 ? h('p', { className: 'dr-note', style: { padding: '0 6px' } }, '还没有读过的书。点上面的按钮选一本开始。') : ordered.map((group) => h('div', { key: group.bookId },
+          h('button', { type: 'button', className: 'dr-group-title', 'aria-expanded': !closed.has(group.bookId), onClick: () => toggle(group.bookId) },
+            h('span', { 'aria-hidden': true }, closed.has(group.bookId) ? '▸' : '▾'),
+            h('span', { className: 'dr-group-name' }, titles.get(group.bookId) ?? group.bookId),
             h('span', { className: 'dr-group-count' }, group.items.length)),
-          closed.has(group.bookId) ? null : group.items.map(({ sessionId, row, binding }) => h('button', {
+          closed.has(group.bookId) ? null : h('div', { className: 'dr-group-items' }, group.items.map(({ sessionId, row, binding }) => h('button', {
             key: sessionId, type: 'button',
             className: 'dr-entry' + (sessionId === current ? ' dr-entry-on' : ''),
             onClick: () => app.openSession(sessionId),
-          }, row.title ?? '新的阅读', h('small', null, [`第 ${(binding.chapter ?? 0) + 1} 节`, formatTime(binding.updatedAt)].filter(Boolean).join(' · ')))))),
+          }, h('span', { className: 'dr-entry-title' }, row.title ?? '新的阅读'),
+          h('small', null, [`第 ${(binding.chapter ?? 0) + 1} 节`, formatTime(binding.updatedAt)].filter(Boolean).join(' · '))))))),
         h('div', { className: 'dr-persona-row', onClick: () => app.openPersona(current), title: '切换工作台性格' },
           h('span', null, '工作台性格'), h('b', null, activePersona?.name ?? '空白')),
         picking ? h(BookPicker, { app, onClose: () => setPicking(false) }) : null)
