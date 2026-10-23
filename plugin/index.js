@@ -39,7 +39,7 @@ async function loadBook(id) {
     const text = decode(await readFile(join(LIBRARY, id)))
     const marks = splitChapters(text)
     const chapters = marks.map((m, i) => ({ title: m.title, text: text.slice(m.at, marks[i + 1]?.at ?? text.length) }))
-    cache.set(id, { id, title: basename(id, extname(id)), chapters })
+    cache.set(id, { id, title: basename(id, extname(id)), chars: text.replace(/\s/g, '').length, chapters })
   }
   return cache.get(id)
 }
@@ -52,7 +52,7 @@ async function handleCall(endpoint, payload = {}) {
   switch (endpoint) {
     case 'library': {
       const names = (await readdir(LIBRARY)).filter((n) => extname(n).toLowerCase() === '.txt')
-      return names.map((id) => ({ id, title: basename(id, extname(id)) }))
+      return Promise.all(names.map(async (id) => ({ id, title: basename(id, extname(id)), chars: (await loadBook(id)).chars })))
     }
     case 'toc': {
       const book = await loadBook(payload.bookId)

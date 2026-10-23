@@ -12,11 +12,12 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require('react')
     const h = React.createElement
-    const { useState, useEffect, useCallback } = React
+    const { useState, useEffect } = React
 
     const ROUTE = '/api/dsh-reader'
     const CHAT_KIND = 'dsh-reader-chat'
     const CHAT_SLOT = 'dsh-reader.chat.conversation'
+    const LIBRARY_KIND = 'dsh-reader-library'
     /** Lower wins: shadows ui-conversation's centre occupant without disposing it. */
     const SHADOW_PRIORITY = -10
     const NARROW = window.matchMedia('(max-width: 767px)')
@@ -33,9 +34,15 @@ window.__ModuleLoader__.load({
 .dr-page{flex:1;overflow:auto;min-height:0}
 .dr-text{max-width:720px;margin:0 auto;padding:32px 24px 96px;font-size:17px;line-height:1.9;white-space:pre-wrap;word-break:break-word}
 .dr-text h2{font-size:22px;margin:0 0 24px;white-space:normal}
-.dr-pick{max-width:560px;margin:0 auto;padding:48px 24px}
-.dr-pick li{list-style:none;margin:6px 0}
-.dr-pick ul{padding:0}
+.dr-btn-line{background:transparent;border:.5px solid var(--dsw-alias-border-l2)}
+.dr-lib{height:100%;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary)}
+.dr-lib-head h3{margin:0 0 4px;font-size:15px}
+.dr-lib-head p,.dr-lib-note{margin:0;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dr-card{display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:var(--dsw-alias-bg-module-platform)}
+.dr-card-on{outline:1px solid var(--dsw-alias-border-l2)}
+.dr-card-text{flex:1;min-width:0}
+.dr-card-title{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dr-card-meta{font-size:12px;color:var(--dsw-alias-label-tertiary);margin-top:2px}
 .dr-strip{display:flex;align-items:center;gap:8px;padding:6px 16px;padding-left:max(16px,var(--dsh-frame-leading-clearance,0px));font-size:12px;color:var(--dsw-alias-label-tertiary);flex:none}
 .dr-chat{display:flex;flex-direction:column;height:100%;min-height:0}
 @media (max-width:640px){.dr-text{padding:20px 16px 80px;font-size:16px}}
@@ -56,6 +63,44 @@ window.__ModuleLoader__.load({
         console.warn(`dsh-reader: ${name} unavailable`, error)
         return null
       }
+    }
+
+    /**
+     * Which book each session reads, shared by the centre and the 书库 tab.
+     * `undefined` = not loaded yet, `null` = no book.
+     */
+    function createBindingStore(rpc, closeChat) {
+      const bindings = new Map()
+      const listeners = new Set()
+      const set = (sessionId, value) => {
+        bindings.set(sessionId, value)
+        for (const listener of listeners) listener(sessionId)
+      }
+      return {
+        get: (sessionId) => bindings.get(sessionId),
+        subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
+        load(sessionId) {
+          if (bindings.has(sessionId)) return
+          bindings.set(sessionId, undefined)
+          rpc('binding', { sessionId }).then((b) => set(sessionId, b))
+        },
+        bind: (sessionId, patch) => rpc('bind', { sessionId, binding: patch }).then((b) => set(sessionId, b)),
+        close(sessionId) {
+          // Unmount the side composer before the centre one takes the session's editor back.
+          closeChat(sessionId)
+          return rpc('bind', { sessionId, binding: null }).then((b) => set(sessionId, b))
+        },
+      }
+    }
+
+    function useBinding(store, sessionId) {
+      const [, render] = useState(0)
+      useEffect(() => {
+        if (sessionId === undefined) return
+        store.load(sessionId)
+        return store.subscribe((changed) => { if (changed === sessionId) render((n) => n + 1) })
+      }, [sessionId])
+      return sessionId === undefined ? undefined : store.get(sessionId)
     }
 
     function FixedChatView(props) {
@@ -92,17 +137,28 @@ window.__ModuleLoader__.load({
         renderFactorySlot('conversation.content', { variant: 'main', phase, hero }))
     }
 
-    function LibraryPicker({ rpc, onPick, onCancel }) {
+    /** Right Sidebar 书库 tab: one card per book; opening one binds it to this session. */
+    function LibraryTab({ sessionId, rpc, store }) {
       const [books, setBooks] = useState(null)
       const [error, setError] = useState(null)
+      const binding = useBinding(store, sessionId)
       useEffect(() => { rpc('library').then(setBooks, (e) => setError(String(e?.message ?? e))) }, [])
-      return h('div', { className: 'dr-page' }, h('div', { className: 'dr-pick' },
-        h('h2', null, '书库'),
-        error ? h('p', null, error) : books === null ? h('p', null, '读取中…')
-          : books.length === 0 ? h('p', null, '书库是空的：把 TXT 放进 dsh-reader/library/ 目录。')
-            : h('ul', null, books.map((b) => h('li', { key: b.id },
-              h('button', { type: 'button', className: 'dr-btn', onClick: () => onPick(b.id) }, b.title)))),
-        h('p', null, h('button', { type: 'button', className: 'dr-btn', onClick: onCancel }, '返回对话'))))
+      const current = binding?.bookId
+      return h('div', { className: 'dr-lib' },
+        h('div', { className: 'dr-lib-head' },
+          h('h3', null, '书库'),
+          h('p', null, '把 TXT 放进 dsh-reader/library/ 目录。一个会话读一本书，阅读位置随会话保存。')),
+        error ? h('p', { className: 'dr-lib-note' }, error)
+          : books === null ? h('p', { className: 'dr-lib-note' }, '读取中…')
+            : books.length === 0 ? h('p', { className: 'dr-lib-note' }, '书库是空的。')
+              : books.map((b) => h('div', { key: b.id, className: 'dr-card' + (b.id === current ? ' dr-card-on' : '') },
+                h('div', { className: 'dr-card-text' },
+                  h('div', { className: 'dr-card-title' }, (b.id === current ? '✓ ' : '') + b.title),
+                  h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字`
+                    + (b.id === current ? ` · 读到第 ${(binding.chapter ?? 0) + 1} 节` : ''))),
+                b.id === current
+                  ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => store.close(sessionId) }, '合上')
+                  : h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => store.bind(sessionId, { bookId: b.id, chapter: 0 }) }, '打开'))))
     }
 
     function Reader({ rpc, binding, onMove, onClose, onShowChat }) {
@@ -132,42 +188,20 @@ window.__ModuleLoader__.load({
 
     /** Centre occupant: the reader when the session has a book, otherwise the ordinary Conversation. */
     function ReaderCentre(props) {
-      const { sessionId, rpc, openChat, closeChat } = props
-      const [binding, setBinding] = useState(undefined)
-      const [picking, setPicking] = useState(false)
-
-      useEffect(() => {
-        setBinding(undefined)
-        setPicking(false)
-        if (sessionId === undefined) return
-        let live = true
-        rpc('binding', { sessionId }).then((b) => { if (live) setBinding(b) })
-        return () => { live = false }
-      }, [sessionId])
-
-      const bind = useCallback((patch) => {
-        rpc('bind', { sessionId, binding: patch }).then(setBinding)
-      }, [sessionId])
+      const { sessionId, rpc, store, openChat, openLibrary } = props
+      const binding = useBinding(store, sessionId)
 
       const reading = sessionId !== undefined && binding?.bookId
       // On a phone the side panel goes fullscreen, so let the reader stay in front until asked.
       useEffect(() => { if (reading && !NARROW.matches) openChat() }, [reading, sessionId])
 
-      if (picking) {
-        return h('div', { className: 'dr-root' }, h(LibraryPicker, {
-          rpc,
-          onPick: (bookId) => { setPicking(false); bind({ bookId, chapter: 0 }) },
-          onCancel: () => setPicking(false),
-        }))
-      }
       // A session owns one composer editor; never mount the centre one while the binding is unknown.
       if (sessionId !== undefined && binding === undefined) return h('div', { className: 'dr-root' })
-      if (!reading) return h(CentreConversation, { ...props, onOpenLibrary: () => setPicking(true) })
+      if (!reading) return h(CentreConversation, { ...props, onOpenLibrary: openLibrary })
       return h(Reader, {
         rpc, binding,
-        onMove: (chapter) => bind({ chapter }),
-        // Unmount the side composer before the centre one takes the session's editor back.
-        onClose: () => { closeChat(sessionId); rpc('bind', { sessionId, binding: null }).then(setBinding) },
+        onMove: (chapter) => store.bind(sessionId, { chapter }),
+        onClose: () => store.close(sessionId),
         onShowChat: openChat,
       })
     }
@@ -185,11 +219,14 @@ window.__ModuleLoader__.load({
           return body.result
         }
         const openChat = () => ctx.sidebarRight.openTab(CHAT_KIND)
+        const openLibrary = () => ctx.sidebarRight.openTab(LIBRARY_KIND)
         const closeChat = (sessionId) => {
           for (const tab of ctx.sidebarRight.openTabs.getSnapshot()) {
             if (tab.kind === CHAT_KIND && tab.sessionId === sessionId) ctx.sidebarRight.close(tab.tabId)
           }
         }
+
+        const store = createBindingStore(rpc, closeChat)
 
         ctx.effect(() => {
           const style = document.createElement('style')
@@ -202,7 +239,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.slots.inject('main.conversation', () => ctx.slots.register({
           name: 'main.conversation',
           priority: SHADOW_PRIORITY,
-          inject: () => ({ rpc, openChat, closeChat }),
+          inject: () => ({ rpc, store, openChat, openLibrary }),
         }, ReaderCentre)), 'dsh-reader: centre reader')
 
         ctx.effect(() => ctx.sidebarRightTabs.register({
@@ -216,6 +253,19 @@ window.__ModuleLoader__.load({
           key: 'dsh-reader',
           children: { [CHAT_SLOT]: { kind: 'single', scope: 'session' } },
         }, ChatTab)), 'dsh-reader: chat tab body')
+
+        ctx.effect(() => ctx.sidebarRightTabs.register({
+          id: 'dsh-reader-library',
+          kind: LIBRARY_KIND,
+          title: () => '书库',
+          guide: [{ id: 'library', order: 10, title: () => '书库', description: () => '选一本书，在中间打开阅读' }],
+        }), 'dsh-reader: library tab type')
+
+        ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
+          name: 'sidebar.right.pane.tab',
+          key: 'dsh-reader-library',
+          inject: () => ({ rpc, store }),
+        }, LibraryTab)), 'dsh-reader: library tab body')
 
         ctx.effect(() => ctx.slots.inject(CHAT_SLOT, () => ctx.slots.register({ name: CHAT_SLOT }, ChatConversation)),
           'dsh-reader: chat conversation')
