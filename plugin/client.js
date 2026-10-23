@@ -235,7 +235,7 @@ window.__ModuleLoader__.load({
                   : books.map((b) => h('div', { key: b.id, className: 'dr-card' },
                     h('div', { className: 'dr-card-text' },
                       h('div', { className: 'dr-card-title' }, b.title),
-                      h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字`)),
+                      h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`)),
                     h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: starting !== null, onClick: () => start(b.id) },
                       starting === b.id ? '正在打开…' : '开始阅读')))))), document.body)
     }
@@ -397,7 +397,7 @@ window.__ModuleLoader__.load({
               : books.map((b) => h('div', { key: b.id, className: 'dr-card' + (b.id === current ? ' dr-card-on' : '') },
                 h('div', { className: 'dr-card-text' },
                   h('div', { className: 'dr-card-title' }, (b.id === current ? '✓ ' : '') + b.title),
-                  h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字`
+                  h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`
                     + (b.id === current ? ` · 读到第 ${(binding.chapter ?? 0) + 1} 节` : ''))),
                 b.id === current
                   ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => app.store.close(sessionId) }, '合上')
