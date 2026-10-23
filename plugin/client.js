@@ -30,7 +30,7 @@ window.__ModuleLoader__.load({
     const NARROW = window.matchMedia('(max-width: 767px)')
 
     const CSS = `
-.dr-root{display:flex;flex-direction:column;height:100%;min-height:0;background:var(--dsw-alias-bg-base,inherit);color:var(--dsw-alias-label-primary)}
+.dr-root{position:relative;display:flex;flex-direction:column;height:100%;min-height:0;background:var(--dsw-alias-bg-base,inherit);color:var(--dsw-alias-label-primary)}
 .dr-bar{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:10px 16px;padding-left:max(16px,var(--dsh-frame-leading-clearance,0px));border-bottom:.5px solid var(--dsw-alias-border-l2);font-size:13px;flex:none}
 .dr-bar .dr-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dr-bar .dr-grow{flex:1}
@@ -39,7 +39,35 @@ window.__ModuleLoader__.load({
 .dr-btn:disabled{opacity:.4;cursor:default}
 .dr-btn-line{background:transparent;border:.5px solid var(--dsw-alias-border-l2)}
 .dr-btn-wide{width:100%;padding:9px 10px;font-weight:600}
-.dr-select{max-width:40%;font:inherit;color:inherit;background:var(--dsw-alias-bg-module-platform);border:none;border-radius:8px;padding:5px 8px}
+.dr-toc-open{display:flex;align-items:center;gap:7px;min-width:0;max-width:60%;height:30px;padding:0 10px;border:0;border-radius:8px;background:var(--dsw-alias-bg-module-platform);color:inherit;font:inherit;cursor:pointer}
+.dr-toc-open:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dr-toc-open span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dr-toc-open em{font-style:normal;color:var(--dsw-alias-label-tertiary);flex:none}
+.dr-nav{width:30px;height:30px;flex:none;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:inherit;cursor:pointer}
+.dr-nav:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+.dr-nav:disabled{opacity:.3;cursor:default}
+.dr-scrim{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.28);animation:dr-fade .15s ease-out}
+.dr-toc{position:absolute;z-index:6;top:0;bottom:0;left:0;width:min(320px,88%);display:flex;flex-direction:column;background:var(--dsw-alias-bg-base,var(--dsw-specific-sidebar-fill));border-right:.5px solid var(--dsw-alias-border-l2);box-shadow:8px 0 24px rgba(0,0,0,.18);animation:dr-slide .18s ease-out}
+@keyframes dr-slide{from{transform:translateX(-24px);opacity:0}}
+@keyframes dr-fade{from{opacity:0}}
+.dr-toc-head{display:flex;align-items:center;gap:8px;padding:14px 14px 8px;padding-left:max(14px,var(--dsh-frame-leading-clearance,0px))}
+.dr-toc-head b{flex:1;font-size:15px;font-weight:650}
+.dr-toc-head span{font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dr-toc-search{margin:0 14px 10px;height:32px;padding:0 10px;border:0;border-radius:8px;background:var(--dsw-alias-bg-module-platform);color:inherit;font:inherit;font-size:13px;outline:none}
+.dr-toc-progress{padding:0 14px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dr-toc-progress div{display:flex;justify-content:space-between;margin-bottom:5px}
+.dr-toc-progress i{display:block;height:3px;border-radius:2px;background:var(--dsw-alias-border-l2);overflow:hidden}
+.dr-toc-progress i b{display:block;height:100%;background:var(--dsw-alias-label-primary);opacity:.7}
+.dr-toc-list{flex:1;min-height:0;overflow:auto;padding:0 6px 16px;font-size:13.5px}
+.dr-toc-vol{padding:12px 10px 4px;font-size:12px;color:var(--dsw-alias-label-tertiary);font-weight:600}
+.dr-toc-row{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:0;border-radius:7px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dr-toc-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dr-toc-row .dr-toc-n{width:28px;flex:none;text-align:right;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary);font-size:12px}
+.dr-toc-row .dr-toc-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dr-toc-row .dr-toc-tag{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center}
+.dr-toc-read{color:var(--dsw-alias-label-tertiary)}
+.dr-toc-now{background:var(--dsw-alias-bg-module-platform);font-weight:650}
+.dr-toc-now .dr-toc-n,.dr-toc-now .dr-toc-tag{color:var(--dsw-alias-label-primary)}
 .dr-page{flex:1;overflow:auto;min-height:0}
 .dr-text{max-width:720px;margin:0 auto;padding:32px 24px 96px;font-size:17px;line-height:1.9;white-space:pre-wrap;word-break:break-word}
 .dr-text h2{font-size:22px;margin:0 0 24px;white-space:normal}
@@ -272,6 +300,11 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       import: 'M10 3v9M6.5 8.5 10 12l3.5-3.5M4 14v2.5h12V14',
       shelf: 'M3.5 4v12M7 4v12M10.5 5l3.5 11M3 16.5h14',
       plus: 'M10 4v12M4 10h12',
+      list: 'M7 5.5h10M7 10h10M7 14.5h10M3.5 5.5h.01M3.5 10h.01M3.5 14.5h.01',
+      left: 'M12.5 4.5 7 10l5.5 5.5',
+      right: 'M7.5 4.5 13 10l-5.5 5.5',
+      close: 'M5 5l10 10M15 5 5 15',
+      note: 'M5 3.5h7l3 3v10H5zM8 9.5h4M8 12.5h4',
     }
     function Icon({ name, size = 16 }) {
       return h('svg', { width: size, height: size, viewBox: '0 0 20 20', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
@@ -469,7 +502,78 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return [body.slice(0, best), h('mark', { key: anchor.nonce, 'data-dr-anchor': '' }, anchor.quote), body.slice(best + anchor.quote.length)]
     }
 
+    const CHAPTER_PREFIX = /^第[0-9零一二三四五六七八九十百千万两〇]+[章回节]\s*/
+    const VOLUME = /^(第[0-9零一二三四五六七八九十百千万两〇]+[卷部集篇][^·]*?) · (.+)$/
+
+    /**
+     * Chapter titles as the drawer shows them. Sources mix 「第7章」 and 「第九章」, so the number comes
+     * from the drawer's own column and the 第X章 prefix is dropped; 楔子/番外 and the like stay whole.
+     * A 「第一卷 X · 第一章 Y」 title (a volume heading merged at split time) opens a volume group.
+     */
+    function tocRows(chapters) {
+      let volume = null
+      return chapters.map((chapter, index) => {
+        const match = VOLUME.exec(chapter.title)
+        if (match) volume = match[1].trim()
+        const full = match ? match[2] : chapter.title
+        return { ...chapter, index, volume, full, name: full.replace(CHAPTER_PREFIX, '').trim() || full }
+      })
+    }
+
+    /** 目录: slides over the left of the reader, like an e-reader's contents panel. */
+    function TocDrawer({ rpc, bookId, index, onPick, onClose }) {
+      const [toc, setToc] = useState(null)
+      const [query, setQuery] = useState('')
+      const list = useRef(null)
+      useEffect(() => { rpc('toc', { bookId }).then(setToc) }, [bookId])
+      useEffect(() => {
+        const onKey = (event) => { if (event.key === 'Escape') onClose() }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+      }, [])
+      // Open at the chapter being read.
+      useEffect(() => { if (toc) list.current?.querySelector('[data-now]')?.scrollIntoView({ block: 'center' }) }, [toc])
+      const rows = toc ? tocRows(toc.chapters) : []
+      const q = query.trim()
+      const shown = q ? rows.filter((row) => String(row.index + 1) === q || row.title.includes(q)) : rows
+      const total = rows.length
+      const percent = total ? Math.round(((index + 1) / total) * 100) : 0
+      const done = rows.filter((row) => row.summarized).length
+      let lastVolume = null
+      return h(React.Fragment, null,
+        h('div', { className: 'dr-scrim', onClick: onClose }),
+        h('nav', { className: 'dr-toc', 'aria-label': '目录' },
+          h('div', { className: 'dr-toc-head' },
+            h('b', null, '目录'),
+            h('span', null, `${total} 节${done ? ` · ${done} 节有总结` : ''}`),
+            h('button', { type: 'button', className: 'dr-nav', 'aria-label': '关闭目录', onClick: onClose }, h(Icon, { name: 'close' }))),
+          h('input', { className: 'dr-toc-search', placeholder: '搜章名或序号', value: query, autoFocus: !NARROW.matches, onChange: (e) => setQuery(e.target.value) }),
+          h('div', { className: 'dr-toc-progress' },
+            h('div', null, h('span', null, `读到 ${index + 1} / ${total || '…'}`), h('span', null, `${percent}%`)),
+            h('i', null, h('b', { style: { width: `${percent}%` } }))),
+          h('div', { className: 'dr-toc-list', ref: list },
+            toc === null ? h('p', { className: 'dr-note', style: { padding: '8px 10px' } }, '读取中…')
+              : shown.length === 0 ? h('p', { className: 'dr-note', style: { padding: '8px 10px' } }, '没有匹配的章节。')
+                : shown.flatMap((row) => {
+                  const out = []
+                  if (!q && row.volume && row.volume !== lastVolume) out.push(h('div', { key: `v${row.index}`, className: 'dr-toc-vol' }, row.volume))
+                  lastVolume = row.volume
+                  const now = row.index === index
+                  out.push(h('button', {
+                    key: row.index, type: 'button', title: row.title, 'data-now': now ? '' : undefined,
+                    className: 'dr-toc-row' + (now ? ' dr-toc-now' : row.index < index ? ' dr-toc-read' : ''),
+                    onClick: () => { onPick(row.index); onClose() },
+                  },
+                  h('span', { className: 'dr-toc-n' }, row.index + 1),
+                  h('span', { className: 'dr-toc-t' }, row.name),
+                  now ? h('span', { className: 'dr-toc-tag' }, '在读')
+                    : row.summarized ? h('span', { className: 'dr-toc-tag', title: '已有总结' }, h(Icon, { name: 'note', size: 14 })) : null))
+                  return out
+                }))))
+    }
+
     function Reader({ rpc, binding, onMove, onClose, onShowChat }) {
+      const [drawer, setDrawer] = useState(false)
       const [toc, setToc] = useState(null)
       const [chapter, setChapter] = useState(null)
       const page = useRef(null)
@@ -486,14 +590,17 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         page.current?.querySelector('[data-dr-anchor]')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
       }, [chapter, anchor?.nonce])
       const count = toc?.chapters.length ?? 0
+      const current = toc ? tocRows(toc.chapters)[index] : null
       return h('div', { className: 'dr-root' },
         h('div', { className: 'dr-bar' },
           h('span', { className: 'dr-title' }, toc?.title ?? '…'),
-          toc ? h('select', { className: 'dr-select', value: index, onChange: (e) => onMove(Number(e.target.value)) },
-            toc.chapters.map((t, i) => h('option', { key: i, value: i }, t))) : null,
+          h('button', { type: 'button', className: 'dr-toc-open', title: '目录', 'aria-label': '打开目录', onClick: () => setDrawer(true) },
+            h(Icon, { name: 'list' }),
+            h('em', null, `${index + 1} / ${count || '…'}`),
+            current ? h('span', null, current.name) : null),
           h('span', { className: 'dr-grow' }),
-          h('button', { type: 'button', className: 'dr-btn', disabled: index <= 0, onClick: () => onMove(index - 1) }, '上一章'),
-          h('button', { type: 'button', className: 'dr-btn', disabled: index >= count - 1, onClick: () => onMove(index + 1) }, '下一章'),
+          h('button', { type: 'button', className: 'dr-nav', title: '上一章', 'aria-label': '上一章', disabled: index <= 0, onClick: () => onMove(index - 1) }, h(Icon, { name: 'left' })),
+          h('button', { type: 'button', className: 'dr-nav', title: '下一章', 'aria-label': '下一章', disabled: index >= count - 1, onClick: () => onMove(index + 1) }, h(Icon, { name: 'right' })),
           h('button', { type: 'button', className: 'dr-btn', onClick: onShowChat }, '对话'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '合上')),
         h('div', { className: 'dr-page', key: index, ref: page },
@@ -501,7 +608,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             chapter === null || chapter.index !== index ? '读取中…' : (() => {
               const body = chapter.text.replace(/^[^\n]*\n/, '')
               return [h('h2', { key: 't' }, chapter.title), ...highlight(body, chapter.text.length - body.length, anchor)]
-            })())))
+            })())),
+        drawer ? h(TocDrawer, { rpc, bookId: binding.bookId, index, onPick: onMove, onClose: () => setDrawer(false) }) : null)
     }
 
     /** Centre occupant: the reader when the session has a book, otherwise the ordinary Conversation. */

@@ -4,7 +4,7 @@ import { readFile, writeFile, mkdir, stat } from 'node:fs/promises'
 import { dirname, join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
-import { CHAPTER_DIR, SUMMARY_DIR, listBooks, migrateFlatBooks, readChapter, readToc, safeName, writeBook } from './books.js'
+import { CHAPTER_DIR, SUMMARY_DIR, listBooks, migrateFlatBooks, readChapter, readToc, safeName, summarized, summaryFile, writeBook } from './books.js'
 import { activePersonaText, managePersona, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 
@@ -67,7 +67,8 @@ async function handleCall(endpoint, payload = {}) {
       return listBooks(LIBRARY)
     case 'toc': {
       const toc = await readToc(LIBRARY, payload.bookId)
-      return { id: payload.bookId, title: toc.title, chapters: toc.chapters.map((c) => c.title) }
+      const done = await summarized(LIBRARY, payload.bookId)
+      return { id: payload.bookId, title: toc.title, chapters: toc.chapters.map((c) => ({ title: c.title, chars: c.chars, summarized: done.has(summaryFile(c)) })) }
     }
     case 'chapter': {
       const chapter = await readChapter(LIBRARY, payload.bookId, payload.index)
