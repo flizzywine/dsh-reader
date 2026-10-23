@@ -4,7 +4,8 @@ import { readFile, writeFile, mkdir, stat } from 'node:fs/promises'
 import { dirname, join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
-import { CHAPTER_DIR, SUMMARY_DIR, listBooks, migrateFlatBooks, readChapter, readToc, safeName, summarized, summaryFile, writeBook } from './books.js'
+import { spawn } from 'node:child_process'
+import { CHAPTER_DIR, SUMMARY_DIR, listBooks, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook } from './books.js'
 import { activePersonaText, managePersona, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 
@@ -69,6 +70,23 @@ async function handleCall(endpoint, payload = {}) {
       const toc = await readToc(LIBRARY, payload.bookId)
       const done = await summarized(LIBRARY, payload.bookId)
       return { id: payload.bookId, title: toc.title, chapters: toc.chapters.map((c) => ({ title: c.title, chars: c.chars, summarized: done.has(summaryFile(c)) })) }
+    }
+    case 'summaries': {
+      // Every summary of a book, in reading order; small files, so one call is fine.
+      const toc = await readToc(LIBRARY, payload.bookId)
+      const done = await summarized(LIBRARY, payload.bookId)
+      const out = []
+      for (const [index, chapter] of toc.chapters.entries()) {
+        if (done.has(summaryFile(chapter))) out.push({ index, title: chapter.title, text: await readSummary(LIBRARY, payload.bookId, index) })
+      }
+      return out
+    }
+    case 'reveal': {
+      // Show a book's folder (or one of its subfolders) in the file manager on this machine.
+      const dir = join(LIBRARY, safeName(payload.bookId), payload.sub === SUMMARY_DIR ? SUMMARY_DIR : '')
+      const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open'
+      spawn(command, [dir], { detached: true, stdio: 'ignore' }).unref()
+      return { dir }
     }
     case 'chapter': {
       const chapter = await readChapter(LIBRARY, payload.bookId, payload.index)

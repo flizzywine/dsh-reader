@@ -106,10 +106,33 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-lib-head>div{flex:1}
 .dr-lib-head h3{margin:0 0 4px;font-size:15px}
 .dr-lib-head p,.dr-note{margin:0;font-size:12px;color:var(--dsw-alias-label-tertiary)}
-.dr-card{display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:var(--dsw-alias-bg-module-platform)}
+.dr-card{display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:color-mix(in srgb,currentColor 6%,transparent)}
 .dr-card-on{outline:1px solid var(--dsw-alias-border-l2)}
 .dr-card-text{flex:1;min-width:0}
 .dr-card-title{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dr-card-link{border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:0;cursor:pointer}
+.dr-card-link:hover .dr-card-title{text-decoration:underline;text-underline-offset:3px}
+.dr-row{display:flex;gap:6px;flex:none}
+.dr-back{align-self:flex-start;display:flex;align-items:center;gap:4px;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;padding:2px 6px 2px 2px;border-radius:6px;cursor:pointer}
+.dr-back:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dr-detail-head h3{margin:0 0 4px;font-size:17px}
+.dr-detail-head p{margin:0;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dr-detail-actions{display:flex;flex-wrap:wrap;gap:6px}
+.dr-link{border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px}
+.dr-sum{border-radius:10px;background:color-mix(in srgb,currentColor 6%,transparent)}
+.dr-sum-head:hover{background:color-mix(in srgb,currentColor 5%,transparent);border-radius:10px}
+.dr-sum-head{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:0;background:transparent;color:inherit;font:inherit;font-size:13.5px;text-align:left;cursor:pointer}
+.dr-sum-head .dr-toc-n{width:24px;flex:none;text-align:right;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary);font-size:12px}
+.dr-sum-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.dr-sum-body{padding:0 14px 14px 46px;display:flex;flex-direction:column;gap:8px}
+.dr-md{font-size:13px;line-height:1.75;color:var(--dsw-alias-label-primary)}
+.dr-md h4,.dr-md h5{margin:10px 0 4px;font-size:13px;font-weight:650;color:var(--dsw-alias-label-secondary)}
+.dr-md h4:first-child,.dr-md h5:first-child{margin-top:0}
+.dr-md p{margin:0 0 6px}
+.dr-md ul,.dr-md ol{margin:0 0 6px;padding-left:1.3em}
+.dr-md li{margin:2px 0}
+.dr-md blockquote{margin:0 0 6px;padding-left:10px;border-left:2px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
+.dr-md code{font-size:12px;padding:0 4px;border-radius:4px;background:var(--dsw-alias-interactive-bg-hover)}
 .dr-card-meta{font-size:12px;color:var(--dsw-alias-label-tertiary);margin-top:2px}
 .dr-strip{display:flex;align-items:center;gap:8px;padding:6px 16px;padding-left:max(16px,var(--dsh-frame-leading-clearance,0px));font-size:12px;color:var(--dsw-alias-label-tertiary);flex:none}
 .dr-chat{display:flex;flex-direction:column;height:100%;min-height:0}
@@ -333,6 +356,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       right: 'M7.5 4.5 13 10l-5.5 5.5',
       close: 'M5 5l10 10M15 5 5 15',
       note: 'M5 3.5h7l3 3v10H5zM8 9.5h4M8 12.5h4',
+      up: 'M5 12.5 10 7.5l5 5',
+      down: 'M5 7.5 10 12.5l5-5',
     }
     function Icon({ name, size = 16 }) {
       return h('svg', { width: size, height: size, viewBox: '0 0 20 20', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
@@ -485,33 +510,111 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     }
 
     /** Right Sidebar 书库 page: one card per book, like tavern's 人物卡库. */
+    /** Inline Markdown the agent's summaries use: **bold** and `code`. */
+    function inlineMd(text) {
+      return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) =>
+        part.startsWith('**') && part.endsWith('**') && part.length > 4 ? h('b', { key: i }, part.slice(2, -2))
+          : part.startsWith('`') && part.endsWith('`') && part.length > 2 ? h('code', { key: i }, part.slice(1, -1))
+            : part)
+    }
+
+    /** Block Markdown for summaries: headings, bullet and numbered lists, quotes, paragraphs. */
+    function Markdown({ text }) {
+      const out = []
+      let list = null
+      let para = []
+      const flushPara = () => { if (para.length) out.push(h('p', { key: out.length }, inlineMd(para.join('')))); para = [] }
+      const flushList = () => { if (list) out.push(h(list.tag, { key: out.length }, list.items.map((item, i) => h('li', { key: i }, inlineMd(item))))); list = null }
+      for (const raw of text.split('\n')) {
+        const line = raw.trim()
+        const heading = /^(#{1,4})\s+(.*)$/.exec(line)
+        const bullet = /^[-*+]\s+(.*)$/.exec(line)
+        const numbered = /^\d+[.、)]\s*(.*)$/.exec(line)
+        if (!line || /^-{3,}$/.test(line)) { flushPara(); flushList(); continue }
+        if (heading) { flushPara(); flushList(); out.push(h(heading[1].length <= 2 ? 'h4' : 'h5', { key: out.length }, inlineMd(heading[2]))); continue }
+        if (bullet || numbered) {
+          flushPara()
+          const tag = bullet ? 'ul' : 'ol'
+          if (list?.tag !== tag) { flushList(); list = { tag, items: [] } }
+          list.items.push((bullet ?? numbered)[1])
+          continue
+        }
+        if (line.startsWith('>')) { flushPara(); flushList(); out.push(h('blockquote', { key: out.length }, inlineMd(line.replace(/^>\s?/, '')))); continue }
+        flushList()
+        para.push(line)
+      }
+      flushPara()
+      flushList()
+      return h('div', { className: 'dr-md' }, out)
+    }
+
+    /** A book's page in 书库: what it is, and every summary the agent has written for it. */
+    function BookDetail({ app, book, sessionId, binding, onBack, here, fresh }) {
+      const [summaries, setSummaries] = useState(null)
+      const [open, setOpen] = useState(() => new Set())
+      useEffect(() => { app.rpc('summaries', { bookId: book.id }).then(setSummaries, () => setSummaries([])) }, [book.id])
+      const reading = binding?.bookId === book.id
+      const toggle = (index) => setOpen((set) => {
+        const next = new Set(set)
+        next.has(index) ? next.delete(index) : next.add(index)
+        return next
+      })
+      const allOpen = summaries?.length > 0 && summaries.every((s) => open.has(s.index))
+      return h('div', { className: 'dr-lib' },
+        h('button', { type: 'button', className: 'dr-back', onClick: onBack }, h(Icon, { name: 'left', size: 14 }), '书库'),
+        h('div', { className: 'dr-detail-head' },
+          h('h3', null, book.title),
+          h('p', null, `${book.chars.toLocaleString()} 字 · ${book.chapters} 节` + (summaries ? ` · ${summaries.length} 节有总结` : '')
+            + (reading ? ` · 正在读第 ${(binding.chapter ?? 0) + 1} 节` : ''))),
+        h('div', { className: 'dr-detail-actions' },
+          reading ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => (binding?.bookId ? fresh(book.id) : here(book.id)) }, binding?.bookId ? '新开阅读' : '打开'),
+          h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => app.rpc('reveal', { bookId: book.id, sub: '总结' }) }, '在 Finder 中打开总结文件夹')),
+        h('div', { className: 'dr-side-label' },
+          h('span', null, '总结'),
+          summaries?.length ? h('button', { type: 'button', className: 'dr-link', onClick: () => setOpen(allOpen ? new Set() : new Set(summaries.map((s) => s.index))) }, allOpen ? '全部收起' : '全部展开') : null),
+        summaries === null ? h('p', { className: 'dr-note' }, '读取中…')
+          : summaries.length === 0 ? h('p', { className: 'dr-note' }, '还没有总结。在对话里让 Agent「把这一节总结一下」或「把前十节都总结了」，写好的总结会出现在这里。')
+            : summaries.map((s) => h('div', { key: s.index, className: 'dr-sum' + (open.has(s.index) ? ' dr-sum-open' : '') },
+              h('button', { type: 'button', className: 'dr-sum-head', 'aria-expanded': open.has(s.index), onClick: () => toggle(s.index) },
+                h('span', { className: 'dr-toc-n' }, s.index + 1),
+                h('span', { className: 'dr-sum-title' }, tocRows([s])[0].name),
+                h(Icon, { name: open.has(s.index) ? 'up' : 'down', size: 14 })),
+              open.has(s.index) ? h('div', { className: 'dr-sum-body' },
+                h(Markdown, { text: s.text.replace(/^#\s+[^\n]*\n+/, '') }),
+                reading ? h('button', { type: 'button', className: 'dr-link', onClick: () => app.store.bind(sessionId, { chapter: s.index }) }, '在阅读区打开这一节') : null) : null)))
+    }
+
+    /** Right Sidebar 书库 page: one card per book, like tavern's 人物卡库; a card opens the book's page. */
     function LibraryTab({ sessionId, app }) {
       const { books, error } = useLibrary(app)
       const binding = useBinding(app.store, sessionId)
       const [failure, setFailure] = useState(null)
+      const [detail, setDetail] = useState(null)
       const current = binding?.bookId
       // Switching keeps each book's place (the host remembers positions per book); 新开 starts a separate session.
       const run = (work) => work.catch((e) => setFailure(String(e?.message ?? e)))
       const here = (bookId) => run(app.store.bind(sessionId, { bookId }))
       const fresh = (bookId) => run(app.startReading(bookId))
+      const shown = detail && books?.find((b) => b.id === detail)
+      if (shown) return h(BookDetail, { app, book: shown, sessionId, binding, onBack: () => setDetail(null), here, fresh })
       return h('div', { className: 'dr-lib' },
         h('div', { className: 'dr-lib-head' },
           h('div', null,
             h('h3', null, '书库'),
-            h('p', null, '导入 TXT，或直接放进 dsh-reader/library/ 目录。一本书一个对话，阅读位置随对话保存。')),
+            h('p', null, '导入 TXT，或直接放进 dsh-reader/library/ 目录。点书名看详情和总结。')),
           h(ImportButton, { app, className: 'dr-btn dr-btn-line', label: '导入' })),
         failure ? h('p', { className: 'dr-error' }, failure) : null,
         error ? h('p', { className: 'dr-error' }, error)
           : books === null ? h('p', { className: 'dr-note' }, '读取中…')
             : books.length === 0 ? h('p', { className: 'dr-note' }, '书库是空的。')
               : books.map((b) => h('div', { key: b.id, className: 'dr-card' + (b.id === current ? ' dr-card-on' : '') },
-                h('div', { className: 'dr-card-text' },
+                h('button', { type: 'button', className: 'dr-card-text dr-card-link', title: '看详情和总结', onClick: () => setDetail(b.id) },
                   h('div', { className: 'dr-card-title' }, (b.id === current ? '✓ ' : '') + b.title),
                   h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`
                     + (b.id === current ? ` · 读到第 ${(binding.chapter ?? 0) + 1} 节` : ''))),
                 b.id === current
                   ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => app.store.close(sessionId) }, '合上')
-                  : h('div', { className: 'dr-side-row' },
+                  : h('div', { className: 'dr-row' },
                     h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '在这个对话里换成这本书', onClick: () => here(b.id) }, current ? '换到这本' : '打开'),
                     current ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '为这本书新开一个对话', onClick: () => fresh(b.id) }, '新开') : null))))
     }
