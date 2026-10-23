@@ -1,0 +1,12 @@
+# dsh-reader bundle patch: one Host+Client plugin row.
+# The browser half is discovered through the package.json dsh.client declaration.
+- insert:
+    - id: dsh-reader
+      name: 'dsh-reader'
+# Reading sessions live apart from the user's other DSH profiles.
+- id: session-persistence-jsonl
+  config:
+    root: !!js dshHomePath('profile-data', 'reader', 'sessions')
+- id: storage-json
+  config:
+    root: !!js dshHomePath('profile-data', 'reader', 'storages')
