@@ -31,7 +31,25 @@ window.__ModuleLoader__.load({
 
     const CSS = `
 .dr-root{position:relative;display:flex;flex-direction:column;height:100%;min-height:0;background:var(--dsw-alias-bg-base,inherit);color:var(--dsw-alias-label-primary)}
-.dr-bar{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:10px 16px;padding-left:max(16px,var(--dsh-frame-leading-clearance,0px));border-bottom:.5px solid var(--dsw-alias-border-l2);font-size:13px;flex:none}
+.dr-bar{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:10px 16px;padding-left:max(16px,var(--dsh-frame-leading-clearance,0px));border-bottom:.5px solid var(--dr-line,var(--dsw-alias-border-l2));font-size:13px;flex:none;background:var(--dr-bg,transparent);color:var(--dr-fg,inherit)}
+.dr-bar .dr-btn,.dr-bar .dr-toc-open{background:var(--dr-chip,var(--dsw-alias-bg-module-platform))}
+.dr-bar .dr-btn:hover,.dr-bar .dr-toc-open:hover,.dr-bar .dr-nav:hover:not(:disabled){background:var(--dr-hover,var(--dsw-alias-interactive-bg-hover))}
+.dr-bar .dr-toc-open em{color:var(--dr-muted,var(--dsw-alias-label-tertiary))}
+.dr-aa{position:absolute;z-index:7;top:50px;right:12px;width:min(300px,calc(100% - 24px));padding:14px;border-radius:14px;background:var(--dsw-alias-bg-base,#1e1e1e);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2);box-shadow:0 12px 32px rgba(0,0,0,.22);display:flex;flex-direction:column;gap:12px;font-size:13px;animation:dr-fade .12s ease-out}
+.dr-aa-row{display:flex;align-items:center;gap:10px}
+.dr-aa-row>span:first-child{width:36px;flex:none;color:var(--dsw-alias-label-tertiary);font-size:12px}
+.dr-aa-swatches{display:flex;gap:8px;flex-wrap:wrap}
+.dr-aa-swatch{width:34px;height:34px;border-radius:50%;border:1px solid var(--dsw-alias-border-l2);cursor:pointer;display:grid;place-items:center;font-size:11px;padding:0}
+.dr-aa-swatch[aria-pressed="true"]{box-shadow:0 0 0 2px var(--dsw-alias-bg-base),0 0 0 3.5px var(--dsw-alias-label-primary)}
+.dr-seg{display:flex;flex:1;padding:2px;border-radius:9px;background:var(--dsw-alias-bg-module-platform)}
+.dr-seg button{flex:1;height:28px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer}
+.dr-seg button[aria-pressed="true"]{background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.dr-step{display:flex;align-items:center;flex:1;gap:6px}
+.dr-step button{width:32px;height:28px;border:0;border-radius:7px;background:var(--dsw-alias-bg-module-platform);color:inherit;font:inherit;font-size:15px;cursor:pointer}
+.dr-step button:disabled{opacity:.35;cursor:default}
+.dr-step b{flex:1;text-align:center;font-weight:500;font-variant-numeric:tabular-nums}
+.dr-aa-foot{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dr-aa-foot button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;text-decoration:underline}
 .dr-bar .dr-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dr-bar .dr-grow{flex:1}
 .dr-btn{white-space:nowrap;flex:none;border:none;background:var(--dsw-alias-bg-module-platform);color:inherit;border-radius:8px;padding:5px 10px;font:inherit;cursor:pointer}
@@ -68,9 +86,13 @@ window.__ModuleLoader__.load({
 .dr-toc-read{color:var(--dsw-alias-label-tertiary)}
 .dr-toc-now{background:var(--dsw-alias-bg-module-platform);font-weight:650}
 .dr-toc-now .dr-toc-n,.dr-toc-now .dr-toc-tag{color:var(--dsw-alias-label-primary)}
-.dr-page{flex:1;overflow:auto;min-height:0}
-.dr-text{max-width:720px;margin:0 auto;padding:32px 24px 96px;font-size:17px;line-height:1.9;white-space:pre-wrap;word-break:break-word}
-.dr-text h2{font-size:22px;margin:0 0 24px;white-space:normal}
+.dr-page{flex:1;overflow:auto;min-height:0;background:var(--dr-bg,transparent)}
+.dr-text{box-sizing:content-box;max-width:var(--dr-measure,36em);margin:0 auto;padding:40px 28px 120px;font-family:var(--dr-font);font-size:var(--dr-size,18px);line-height:var(--dr-leading,1.9);color:var(--dr-fg,inherit);text-align:justify;text-justify:inter-character;word-break:break-word;hyphens:auto;font-feature-settings:"palt" 0}
+.dr-text h2{font-size:1.4em;line-height:1.4;font-weight:600;margin:0 0 1.6em;text-align:left;letter-spacing:.02em}
+.dr-text h3{font-size:1.1em;font-weight:600;margin:1.6em 0 .8em;text-align:left}
+.dr-text p{margin:0 0 .55em;text-indent:2em}
+.dr-text .dr-meta{text-indent:0;font-size:.78em;color:var(--dr-muted,var(--dsw-alias-label-tertiary));margin-bottom:1.2em}
+.dr-text .dr-end{text-align:center;text-indent:0;margin-top:3em;font-size:.8em;color:var(--dr-muted,var(--dsw-alias-label-tertiary))}
 .dr-text mark{color:inherit;background:rgba(255,196,0,.28);border-radius:3px;padding:1px 0;box-shadow:0 0 0 2px rgba(255,196,0,.28);animation:dr-flash 1.6s ease-out 2}
 @keyframes dr-flash{0%{background:rgba(255,196,0,.6)}100%{background:rgba(255,196,0,.28)}}
 .dr-lib{height:100%;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary)}
@@ -488,19 +510,49 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                     current ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '为这本书新开一个对话', onClick: () => fresh(b.id) }, '新开') : null))))
     }
 
+    const HEADING_LINE = /^(第[0-9零一二三四五六七八九十百千万两〇]+[章回节卷集部篇]|序章|序言|楔子|引子|尾声|后记|番外)/
+    const META_LINE = /^(作品)?(作者|更新|更新时间|字数|本章字数|首发)[:：]/
+
     /**
-     * Split the displayed body around the agent's quote. The host gives the quote's offset in the chapter
-     * file; the body drops the heading line, so pick the occurrence nearest that offset.
+     * Turn a chapter file into display blocks. Source TXT carries its own indentation (spaces or 　),
+     * CRLF and stray blank lines; the reader drops all of that and sets its own indent and spacing.
+     * Each block keeps its offset in the file, so an agent quote can be found again.
      */
-    function highlight(body, removed, anchor) {
-      if (!anchor?.quote) return [body, null]
-      let best = -1
-      for (let at = body.indexOf(anchor.quote); at >= 0; at = body.indexOf(anchor.quote, at + 1)) {
-        if (best < 0 || Math.abs(at + removed - anchor.at) < Math.abs(best + removed - anchor.at)) best = at
+    function blocks(text, title) {
+      const out = []
+      let at = 0
+      for (const raw of text.split('\n')) {
+        const start = at
+        at += raw.length + 1
+        const lead = raw.length - raw.replace(/^[\s\u3000]+/, '').length
+        const line = raw.replace(/^[\s\u3000]+|[\s\u3000]+$/g, '')
+        if (!line) continue
+        if (out.length === 0 && start === 0) continue // the file's own heading line; the title is shown above
+        if (line === title || (line.length >= 4 && title.endsWith(line))) continue
+        const kind = META_LINE.test(line) || (line.includes('更新') && line.includes('字数')) ? 'meta'
+          : HEADING_LINE.test(line) && line.length <= 30 ? 'sub' : 'p'
+        out.push({ kind, text: line, at: start + lead })
       }
-      if (best < 0) return [body, null]
-      return [body.slice(0, best), h('mark', { key: anchor.nonce, 'data-dr-anchor': '' }, anchor.quote), body.slice(best + anchor.quote.length)]
+      return out
     }
+
+    /** Render blocks; the agent's quote is marked inside the block nearest its file offset. */
+    function renderBlocks(list, anchor) {
+      let target = -1
+      if (anchor?.quote) {
+        const holding = list.map((block, i) => block.text.includes(anchor.quote) ? i : -1).filter((i) => i >= 0)
+        target = holding.sort((a, b) => Math.abs(list[a].at - anchor.at) - Math.abs(list[b].at - anchor.at))[0] ?? -1
+      }
+      return list.map((block, i) => {
+        const tag = block.kind === 'sub' ? 'h3' : 'p'
+        const props = { key: i, className: block.kind === 'meta' ? 'dr-meta' : undefined }
+        if (i !== target) return h(tag, props, block.text)
+        const cut = block.text.indexOf(anchor.quote)
+        return h(tag, props, block.text.slice(0, cut),
+          h('mark', { key: anchor.nonce, 'data-dr-anchor': '' }, anchor.quote), block.text.slice(cut + anchor.quote.length))
+      })
+    }
+
 
     const CHAPTER_PREFIX = /^第[0-9零一二三四五六七八九十百千万两〇]+[章回节]\s*/
     const VOLUME = /^(第[0-9零一二三四五六七八九十百千万两〇]+[卷部集篇][^·]*?) · (.+)$/
@@ -574,7 +626,106 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                 }))))
     }
 
+    /** Reading themes, after the usual e-reader set. `auto` keeps the app's own colours. */
+    const THEMES = {
+      auto: { name: '跟随界面' },
+      paper: { name: '纸白', bg: '#F7F5F0', fg: '#2B2A27', muted: '#8A857A' },
+      sepia: { name: '羊皮纸', bg: '#F3E9D2', fg: '#4A3B25', muted: '#8A7350' },
+      green: { name: '护眼绿', bg: '#E3EDDB', fg: '#2C3A27', muted: '#5F7A53' },
+      night: { name: '夜间', bg: '#1C1B19', fg: '#C9C3B6', muted: '#7D786D' },
+    }
+    const FONTS = {
+      song: { name: '宋体', stack: '"Songti SC","STSong","Noto Serif SC","Source Han Serif SC","Noto Serif CJK SC","SimSun",serif' },
+      kai: { name: '楷体', stack: '"LXGW WenKai","霞鹜文楷","Kaiti SC","STKaiti","KaiTi",serif' },
+      hei: { name: '黑体', stack: 'var(--dsh-font-family-text,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif)' },
+    }
+    const WIDTHS = { narrow: { name: '窄', em: 30 }, medium: { name: '中', em: 36 }, wide: { name: '宽', em: 44 } }
+    const TYPE_DEFAULTS = { theme: 'auto', font: 'song', size: 18, leading: 1.9, width: 'medium' }
+    const TYPE_KEY = 'dsh-reader:typography'
+
+    /** Reading preferences live in this browser (like any e-reader); storage may be unavailable, so never rely on it. */
+    const typography = (() => {
+      let value = { ...TYPE_DEFAULTS }
+      try { value = { ...value, ...JSON.parse(localStorage.getItem(TYPE_KEY) ?? '{}') } } catch {}
+      const changed = createSignal()
+      return {
+        changed,
+        get: () => value,
+        set(patch) {
+          value = patch === null ? { ...TYPE_DEFAULTS } : { ...value, ...patch }
+          try { localStorage.setItem(TYPE_KEY, JSON.stringify(value)) } catch {}
+          changed.bump()
+        },
+      }
+    })()
+
+    function useTypography() {
+      useSignal(typography.changed)
+      return typography.get()
+    }
+
+    /** CSS variables the page, bar and text read; `auto` leaves colours to the app theme. */
+    function typographyStyle(t) {
+      const theme = THEMES[t.theme] ?? THEMES.auto
+      const style = {
+        '--dr-font': (FONTS[t.font] ?? FONTS.song).stack,
+        '--dr-size': `${t.size}px`,
+        '--dr-leading': String(t.leading),
+        '--dr-measure': `${(WIDTHS[t.width] ?? WIDTHS.medium).em}em`,
+      }
+      if (theme.bg) {
+        const dark = t.theme === 'night'
+        Object.assign(style, {
+          '--dr-bg': theme.bg, '--dr-fg': theme.fg, '--dr-muted': theme.muted,
+          '--dr-line': dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)',
+          '--dr-chip': dark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.05)',
+          '--dr-hover': dark ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.09)',
+          colorScheme: dark ? 'dark' : 'light',
+        })
+      }
+      return style
+    }
+
+    function Stepper({ value, min, max, step, format, onChange }) {
+      const round = (n) => Math.round(n * 100) / 100
+      return h('div', { className: 'dr-step' },
+        h('button', { type: 'button', 'aria-label': '减小', disabled: value <= min, onClick: () => onChange(round(Math.max(min, value - step))) }, '−'),
+        h('b', null, format(value)),
+        h('button', { type: 'button', 'aria-label': '增大', disabled: value >= max, onClick: () => onChange(round(Math.min(max, value + step))) }, '+'))
+    }
+
+    /** The Aa panel: theme, font, size, line height and width for the reading surface. */
+    function TypographyPanel({ onClose }) {
+      const t = useTypography()
+      useEffect(() => {
+        const onKey = (event) => { if (event.key === 'Escape') onClose() }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+      }, [])
+      const seg = (options, key) => h('div', { className: 'dr-seg' }, Object.entries(options).map(([id, option]) =>
+        h('button', { key: id, type: 'button', 'aria-pressed': t[key] === id, onClick: () => typography.set({ [key]: id }) }, option.name)))
+      return h(React.Fragment, null,
+        h('div', { style: { position: 'absolute', inset: 0, zIndex: 6 }, onClick: onClose }),
+        h('div', { className: 'dr-aa', role: 'dialog', 'aria-label': '阅读设置' },
+          h('div', { className: 'dr-aa-row' }, h('span', null, '主题'),
+            h('div', { className: 'dr-aa-swatches' }, Object.entries(THEMES).map(([id, theme]) => h('button', {
+              key: id, type: 'button', className: 'dr-aa-swatch', title: theme.name, 'aria-label': theme.name, 'aria-pressed': t.theme === id,
+              style: theme.bg ? { background: theme.bg, color: theme.fg } : { background: 'var(--dsw-alias-bg-module-platform)' },
+              onClick: () => typography.set({ theme: id }),
+            }, id === 'auto' ? '自动' : '文')))),
+          h('div', { className: 'dr-aa-row' }, h('span', null, '字体'), seg(FONTS, 'font')),
+          h('div', { className: 'dr-aa-row' }, h('span', null, '字号'),
+            h(Stepper, { value: t.size, min: 14, max: 30, step: 1, format: (v) => `${v}`, onChange: (size) => typography.set({ size }) })),
+          h('div', { className: 'dr-aa-row' }, h('span', null, '行距'),
+            h(Stepper, { value: t.leading, min: 1.4, max: 2.6, step: 0.1, format: (v) => v.toFixed(1), onChange: (leading) => typography.set({ leading }) })),
+          h('div', { className: 'dr-aa-row' }, h('span', null, '页宽'), seg(WIDTHS, 'width')),
+          h('div', { className: 'dr-aa-foot' }, h('span', null, '只保存在这台浏览器'),
+            h('button', { type: 'button', onClick: () => typography.set(null) }, '恢复默认'))))
+    }
+
     function Reader({ rpc, binding, onMove, onClose, onShowChat }) {
+      const t = useTypography()
+      const [panel, setPanel] = useState(false)
       const [drawer, setDrawer] = useState(false)
       const [toc, setToc] = useState(null)
       const [chapter, setChapter] = useState(null)
@@ -593,7 +744,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       }, [chapter, anchor?.nonce])
       const count = toc?.chapters.length ?? 0
       const current = toc ? tocRows(toc.chapters)[index] : null
-      return h('div', { className: 'dr-root' },
+      return h('div', { className: 'dr-root', 'data-theme': t.theme, style: typographyStyle(t) },
         h('div', { className: 'dr-bar' },
           h('span', { className: 'dr-title' }, toc?.title ?? '…'),
           h('button', { type: 'button', className: 'dr-toc-open', title: '目录', 'aria-label': '打开目录', onClick: () => setDrawer(true) },
@@ -603,15 +754,18 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('span', { className: 'dr-grow' }),
           h('button', { type: 'button', className: 'dr-nav', title: '上一章', 'aria-label': '上一章', disabled: index <= 0, onClick: () => onMove(index - 1) }, h(Icon, { name: 'left' })),
           h('button', { type: 'button', className: 'dr-nav', title: '下一章', 'aria-label': '下一章', disabled: index >= count - 1, onClick: () => onMove(index + 1) }, h(Icon, { name: 'right' })),
+          h('button', { type: 'button', className: 'dr-btn', title: '阅读设置', 'aria-label': '阅读设置', 'aria-expanded': panel, onClick: () => setPanel((open) => !open), style: { fontFamily: FONTS.song.stack, fontWeight: 600 } }, 'Aa'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onShowChat }, '对话'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '合上')),
         h('div', { className: 'dr-page', key: index, ref: page },
           h('article', { className: 'dr-text' },
-            chapter === null || chapter.index !== index ? '读取中…' : (() => {
-              const body = chapter.text.replace(/^[^\n]*\n/, '')
-              return [h('h2', { key: 't' }, chapter.title), ...highlight(body, chapter.text.length - body.length, anchor)]
-            })())),
-        drawer ? h(TocDrawer, { rpc, bookId: binding.bookId, index, onPick: onMove, onClose: () => setDrawer(false) }) : null)
+            chapter === null || chapter.index !== index ? h('p', { className: 'dr-meta' }, '读取中…') : [
+              h('h2', { key: 't' }, current?.full ?? chapter.title),
+              ...renderBlocks(blocks(chapter.text.replace(/\r/g, ''), chapter.title), anchor),
+              h('p', { key: 'end', className: 'dr-end' }, index >= count - 1 ? '全书完' : `本节完 · 下一节「${toc ? tocRows(toc.chapters)[index + 1]?.name ?? '' : ''}」`),
+            ])),
+        drawer ? h(TocDrawer, { rpc, bookId: binding.bookId, index, onPick: onMove, onClose: () => setDrawer(false) }) : null,
+        panel ? h(TypographyPanel, { onClose: () => setPanel(false) }) : null)
     }
 
     /**
