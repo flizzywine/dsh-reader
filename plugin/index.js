@@ -5,7 +5,7 @@ import { dirname, join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook } from './books.js'
+import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook } from './books.js'
 import { activePersonaText, managePersona, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 
@@ -82,9 +82,34 @@ async function handleCall(endpoint, payload = {}) {
       return out
     }
     case 'highlights': {
+      // Highlights (with their notes) and the notes about the whole book, for the reader and 书详情.
       const toc = await readToc(LIBRARY, payload.bookId)
-      return (await readHighlights(LIBRARY, payload.bookId)).map((h) => ({ ...h, title: toc.chapters[h.chapter]?.title ?? '' }))
+      return {
+        highlights: (await readHighlights(LIBRARY, payload.bookId)).map((h) => ({ ...h, title: toc.chapters[h.chapter]?.title ?? '' })),
+        notes: await readBookNotes(LIBRARY, payload.bookId),
+      }
     }
+    // A note about the whole book; `chapter` records where the user was reading, if anywhere.
+    case 'book-note-save':
+      return updateHighlights(LIBRARY, payload.bookId, (_list, newId, notes) => {
+        const text = String(payload.note ?? '').trim()
+        if (!text) throw new Error('笔记不能为空')
+        if (payload.id) {
+          const found = notes.find((n) => n.id === payload.id)
+          if (!found) throw new Error('这条笔记已经不在了')
+          found.note = text
+          found.updatedAt = new Date().toISOString()
+          return found
+        }
+        const note = { id: newId('n'), note: text, chapter: Number.isInteger(payload.chapter) ? payload.chapter : null, createdAt: new Date().toISOString() }
+        notes.push(note)
+        return note
+      })
+    case 'book-note-remove':
+      return updateHighlights(LIBRARY, payload.bookId, (_list, _newId, notes) => {
+        const i = notes.findIndex((n) => n.id === payload.id)
+        return i < 0 ? null : notes.splice(i, 1)[0]
+      })
     // The reader's own highlights: the page sends file offsets, the host cuts the quote.
     case 'highlight-add': {
       const { highlight } = await addHighlight(LIBRARY, payload.bookId, { index: payload.chapter, at: payload.at, end: payload.end, by: 'user', note: payload.note ?? '' })
@@ -236,7 +261,7 @@ const READING_SECTION = [
   '- 读完一节可以用 save_summary 写总结；回顾前情先用 read_summaries 读总结，不够再回原文。',
   `- 每本书是工作区里的一个文件夹：\`<书名>/${CHAPTER_DIR}/\` 是分好的章节，\`<书名>/${SUMMARY_DIR}/\` 是总结；跨章搜索可以直接 grep 章节目录。`,
   '- 用户想看某段情节时，先用 grep 或 read_chapter 找到它，再用 show_passage 让阅读区跳过去并高亮。',
-  '- 用户要求标记、划重点时，用 add_highlight 划线，只标原文、不写评语，笔记由用户自己记；不要自己主动划。用户问起划过的内容时，用 find_highlights 检索。',
+  '- 用户要求标记、划重点时，用 add_highlight 划线，只标原文、不写评语，笔记由用户自己记；不要自己主动划。用户问起划过的内容或自己的笔记时，用 find_highlights 检索；笔记只读不写。',
   '- 用户还没读到的部分算剧透：除非用户要求，不要透露当前节之后的情节。',
 ].join('\n')
 

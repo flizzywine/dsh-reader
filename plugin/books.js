@@ -5,7 +5,11 @@
 //   library/<书名>/目录.json                 { title, chapters: [{ title, file, chars }] }
 //   library/<书名>/章节/0001 第一章 xxx.txt
 //   library/<书名>/总结/0001 第一章 xxx.md    written by the agent through save_summary
-//   library/<书名>/划线.json                 { next, highlights: [{ id, chapter, at, quote, prefix, suffix, note, by, createdAt }] }
+//   library/<书名>/划线.json                 { next, highlights: [{ id, chapter, at, quote, prefix, suffix, note, by, createdAt }],
+//                                              notes: [{ id, note, chapter, createdAt }] }
+//                                            The user's 笔记 are the notes on highlights plus `notes`, the
+//                                            ones about the whole book; their `chapter` is only where the
+//                                            user was reading when writing, not an anchor.
 //                                            `at` is the quote's offset in the chapter file; prefix/suffix
 //                                            (after W3C's TextQuoteSelector) find it again if the text moves.
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
@@ -190,22 +194,29 @@ export async function readHighlights(library, id) {
   return (await readHighlightFile(library, id)).highlights ?? []
 }
 
+/** Notes about the whole book, newest first. */
+export async function readBookNotes(library, id) {
+  return ((await readHighlightFile(library, id)).notes ?? []).slice().reverse()
+}
+
 /** One write at a time per process, so parallel tool calls never drop each other's highlights. */
 let highlightWrites = Promise.resolve()
 
 /**
- * Read-modify-write a book's highlights. `change` gets the list (sorted by place in the book
- * afterwards) and a `newId()` that never reuses a deleted id; it returns whatever the caller wants back.
+ * Read-modify-write a book's highlights and notes. `change` gets the highlight list (sorted by place
+ * in the book afterwards), a `newId(prefix)` that never reuses a deleted id, and the whole-book notes
+ * list; it returns whatever the caller wants back.
  */
 export function updateHighlights(library, id, change) {
   const work = highlightWrites.then(async () => {
     const file = await readHighlightFile(library, id)
     const list = file.highlights ?? []
-    let next = file.next ?? list.reduce((max, h) => Math.max(max, Number(String(h.id).slice(1)) || 0), 0) + 1
-    const result = await change(list, () => `h${next++}`)
+    const notes = file.notes ?? []
+    let next = file.next ?? [...list, ...notes].reduce((max, h) => Math.max(max, Number(String(h.id).slice(1)) || 0), 0) + 1
+    const result = await change(list, (prefix = 'h') => `${prefix}${next++}`, notes)
     list.sort((a, b) => a.chapter - b.chapter || a.at - b.at)
     const path = join(library, safeName(id), HIGHLIGHT_FILE)
-    await writeFile(`${path}.tmp`, JSON.stringify({ next, highlights: list }, null, 2))
+    await writeFile(`${path}.tmp`, JSON.stringify({ next, highlights: list, notes }, null, 2))
     await rename(`${path}.tmp`, path)
     return result
   })

@@ -1,6 +1,6 @@
 // Agent tools for reading sessions. Each resolves the book from the calling session's binding,
 // so the agent never names files; sessions without a book get a plain error.
-import { addHighlight, readChapter, readHighlights, readSummary, readToc, summarized, summaryFile, updateHighlights, writeSummary } from './books.js'
+import { addHighlight, readBookNotes, readChapter, readHighlights, readSummary, readToc, summarized, summaryFile, updateHighlights, writeSummary } from './books.js'
 
 /** Characters returned per read_chapter call; longer chapters are paged with `offset`. */
 const PAGE_CHARS = 12000
@@ -157,7 +157,7 @@ export function readingTools({ library, bindingFor, updateBinding }) {
     },
     {
       name: 'find_highlights',
-      description: `检索这本书的划线（重点）。query 匹配原文或用户想法里的文字；from/to 限定节的范围；都不填就列出全部。最多返回 ${HIGHLIGHT_LIMIT} 条，按书中顺序。用户问「我标过/划过哪些」「之前记的那段」时用。`,
+      description: `检索这本书的划线和用户的笔记。笔记有两种：写在划线上的想法，和不挂在原文上、关于整本书的笔记（记着用户写的时候读到第几节）。query 匹配原文或笔记里的文字；from/to 只限定划线所在的节（给了范围就不列整本书的笔记）；都不填就列出全部。划线最多返回 ${HIGHLIGHT_LIMIT} 条，按书中顺序。用户问「我标过/划过哪些」「我记过什么」「之前写的感想」时用。笔记是用户自己写的，你只读不写。`,
       parameters: {
         type: 'object',
         properties: {
@@ -175,11 +175,20 @@ export function readingTools({ library, bindingFor, updateBinding }) {
         const to = integer(args, 'to', Number.MAX_SAFE_INTEGER) - 1
         const all = await readHighlights(library, bookId)
         const hits = all.filter((h) => h.chapter >= from && h.chapter <= to && (!query || h.quote.includes(query) || h.note?.includes(query)))
-        if (hits.length === 0) return all.length === 0 ? '这本书还没有划线。' : `没有符合条件的划线（全书共 ${all.length} 条）。`
-        const toc = await readToc(library, bookId)
-        const shown = hits.slice(0, HIGHLIGHT_LIMIT).map((h) => formatHighlight(h, toc))
-        const more = hits.length > HIGHLIGHT_LIMIT ? `\n\n[还有 ${hits.length - HIGHLIGHT_LIMIT} 条没列出，请缩小范围或换关键词]` : ''
-        return `找到 ${hits.length} 条划线（全书共 ${all.length} 条）：\n\n${shown.join('\n')}${more}`
+        const ranged = args?.from !== undefined || args?.to !== undefined
+        const notes = ranged ? [] : (await readBookNotes(library, bookId)).filter((n) => !query || n.note.includes(query))
+        if (hits.length === 0 && notes.length === 0) return all.length === 0 ? '这本书还没有划线和笔记。' : `没有符合条件的划线或笔记（全书共 ${all.length} 条划线）。`
+        const parts = []
+        if (notes.length) {
+          parts.push(`整本书的笔记 ${notes.length} 条（新的在前）：\n\n${notes.map((n) => `[${n.id}]${n.chapter === null ? '' : `（写于读到第 ${n.chapter + 1} 节时）`} ${n.note}`).join('\n')}`)
+        }
+        if (hits.length) {
+          const toc = await readToc(library, bookId)
+          const shown = hits.slice(0, HIGHLIGHT_LIMIT).map((h) => formatHighlight(h, toc))
+          const more = hits.length > HIGHLIGHT_LIMIT ? `\n\n[还有 ${hits.length - HIGHLIGHT_LIMIT} 条没列出，请缩小范围或换关键词]` : ''
+          parts.push(`找到 ${hits.length} 条划线（全书共 ${all.length} 条）：\n\n${shown.join('\n')}${more}`)
+        }
+        return parts.join('\n\n')
       },
     },
     {

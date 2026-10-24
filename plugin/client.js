@@ -119,6 +119,19 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-pop-quote{margin:0;max-height:7.5em;overflow:auto;padding:4px 10px;border-left:3px solid var(--dr-hl-line);white-space:pre-line;line-height:1.6;color:var(--dsw-alias-label-secondary)}
 .dr-pop-text{width:100%;box-sizing:border-box;resize:vertical;min-height:64px;padding:8px 10px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:inherit;font:inherit;line-height:1.6}
 .dr-pop-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dr-pop-context{margin:0;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+/* Notes about the whole book: a dashed 写笔记 button, then plain cards with when/where they were written. */
+.dr-booknotes{display:flex;flex-direction:column;gap:8px}
+.dr-notes .dr-booknotes{padding:2px 6px 10px}
+.dr-booknote-add{display:flex;align-items:center;justify-content:center;gap:6px;height:34px;border:1px dashed var(--dsw-alias-border-l2);border-radius:9px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;cursor:pointer}
+.dr-booknote-add:hover{border-color:var(--dr-hl-line);color:var(--dsw-alias-label-primary)}
+.dr-booknote{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:9px;background:color-mix(in srgb,var(--dr-hl-line) 7%,transparent);border:.5px solid color-mix(in srgb,var(--dr-hl-line) 25%,transparent)}
+.dr-booknote>p{margin:0;font-size:13.5px;line-height:1.75;white-space:pre-line}
+.dr-booknote-edit{gap:8px;background:transparent}
+.dr-booknote-foot{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
+.dr-booknote-foot span{flex:1}
+.dr-booknote-foot button{padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer}
+.dr-booknote-foot button:hover{color:var(--dsw-alias-label-primary)}
 .dr-pop-row .dr-note{font-size:12px}
 .dr-pop-row .dr-grow{flex:1}
 .dr-danger{color:#c0392b!important}
@@ -627,19 +640,25 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      */
     function BookDetail({ app, book, sessionId, binding, onBack, here, fresh }) {
       const [summaries, setSummaries] = useState(null)
-      const [highlights, setHighlights] = useState(null)
+      const [marks, setMarks] = useState(null)
       const [toc, setToc] = useState(null)
       const [tab, setTab] = useState('marks')
       const [open, setOpen] = useState(() => new Set())
       useEffect(() => { app.rpc('summaries', { bookId: book.id }).then(setSummaries, () => setSummaries([])) }, [book.id])
       // Notes written in the reader, and the agent's highlights (binding.marks), show up without reopening.
       const marksVersion = useSignal(app.marksChanged)
-      useEffect(() => { app.rpc('highlights', { bookId: book.id }).then(setHighlights, () => setHighlights([])) }, [book.id, marksVersion, binding?.marks])
+      useEffect(() => { app.rpc('highlights', { bookId: book.id }).then(setMarks, () => setMarks({ highlights: [], notes: [] })) }, [book.id, marksVersion, binding?.marks])
       useEffect(() => { app.rpc('toc', { bookId: book.id }).then(setToc, () => {}) }, [book.id])
       const reading = binding?.bookId === book.id
       const rows = toc ? tocRows(toc.chapters) : []
       const chapterLabel = (index, title) => `第 ${index + 1} 节 · ${rows[index]?.name ?? tocRows([{ title }])[0].name}`
+      const highlights = marks?.highlights ?? null
+      // 笔记 = notes about the whole book + notes on highlights.
       const notes = highlights?.filter((m) => m.note) ?? null
+      const bookNotes = marks?.notes ?? []
+      const changed = (work) => work.then(() => app.marksChanged.bump(), (e) => window.alert(String(e?.message ?? e)))
+      const saveNote = (id, note) => changed(app.rpc('book-note-save', { bookId: book.id, id, note, chapter: reading ? binding.chapter ?? 0 : null }))
+      const removeNote = (id) => changed(app.rpc('book-note-remove', { bookId: book.id, id }))
       const toggle = (index) => setOpen((set) => {
         const next = new Set(set)
         next.has(index) ? next.delete(index) : next.add(index)
@@ -658,7 +677,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const empty = (text) => h('p', { className: 'dr-bd-empty' }, text)
       const tabs = [
         ['marks', '高亮', highlights?.length],
-        ['notes', '笔记', notes?.length],
+        ['notes', '笔记', notes ? notes.length + bookNotes.length : 0],
         ['sums', '总结', summaries?.length],
       ]
       return h('div', { className: 'dr-lib dr-bd' },
@@ -681,8 +700,11 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
               h('div', { className: 'dr-bd-foot' }, m.by === 'agent' ? h('span', null, 'Agent 划的') : null, locateButton(m))))))
           : null,
         tab === 'notes' ? (notes === null ? empty('读取中…')
-          : notes.length === 0 ? empty('还没有笔记。在阅读区选中文字点「写想法」，或者点开一条高亮写下想法。')
-            : h('div', { className: 'dr-bd-list' }, grouped(notes, (m) => h('div', { key: m.id, className: 'dr-bd-note' },
+          : h('div', { className: 'dr-bd-list' },
+            h('div', { className: 'dr-bd-chapter' }, '整本书'),
+            h(BookNotes, { notes: bookNotes, chapter: reading ? binding.chapter ?? 0 : null, save: saveNote, remove: removeNote }),
+            notes.length === 0 ? empty('原文上还没有笔记。在阅读区选中文字点「写想法」，或者点开一条高亮写下想法。')
+              : grouped(notes, (m) => h('div', { key: m.id, className: 'dr-bd-note' },
               h('p', null, m.note),
               h('blockquote', null, plainQuote(m.quote)),
               h('div', { className: 'dr-bd-foot' }, locateButton(m))))))
@@ -874,13 +896,14 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return h('div', { className, style, onMouseDown: (e) => { if (e.target.tagName !== 'TEXTAREA') e.preventDefault() } }, children)
     }
 
-    /** Edits a note: for a new highlight (with its quote) or an existing one. */
-    function NoteEditor({ quote, initial, onSave, onCancel, extra }) {
+    /** Edits a note: on a quote (a new or existing highlight), or about the whole book (`context` instead). */
+    function NoteEditor({ quote, context, initial, placeholder = '写下你的想法…', onSave, onCancel, extra }) {
       const [value, setValue] = useState(initial ?? '')
       return h(React.Fragment, null,
-        h('blockquote', { className: 'dr-pop-quote' }, plainQuote(quote)),
+        quote ? h('blockquote', { className: 'dr-pop-quote' }, plainQuote(quote)) : null,
+        context ? h('p', { className: 'dr-pop-context' }, context) : null,
         h('textarea', {
-          className: 'dr-pop-text', rows: 3, autoFocus: true, placeholder: '写下你的想法…', value,
+          className: 'dr-pop-text', rows: 3, autoFocus: true, placeholder, value,
           onChange: (e) => setValue(e.target.value),
           onKeyDown: (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSave(value); if (e.key === 'Escape') onCancel() },
         }),
@@ -916,7 +939,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     }
 
     /** 目录: slides over the left of the reader, like an e-reader's contents panel. */
-    function TocDrawer({ rpc, bookId, index, agentIndex, highlights, onPick, onLocate, onClose }) {
+    function TocDrawer({ rpc, bookId, index, agentIndex, highlights, notes, saveNote, removeNote, onPick, onLocate, onClose }) {
       const [toc, setToc] = useState(null)
       const [query, setQuery] = useState('')
       const [tab, setTab] = useState('toc')
@@ -942,11 +965,11 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('div', { className: 'dr-toc-head' },
             h('div', { className: 'dr-toc-tabs', role: 'tablist' },
               h('button', { type: 'button', role: 'tab', 'aria-selected': tab === 'toc', onClick: () => setTab('toc') }, '目录'),
-              h('button', { type: 'button', role: 'tab', 'aria-selected': tab === 'notes', onClick: () => setTab('notes') }, `笔记${highlights.length ? ` ${highlights.length}` : ''}`)),
-            h('span', null, tab === 'toc' ? `${total} 节${done ? ` · ${done} 节有总结` : ''}` : `${highlights.filter((m) => m.note).length} 条想法`),
+              h('button', { type: 'button', role: 'tab', 'aria-selected': tab === 'notes', onClick: () => setTab('notes') }, `笔记${highlights.length + notes.length ? ` ${highlights.length + notes.length}` : ''}`)),
+            h('span', null, tab === 'toc' ? `${total} 节${done ? ` · ${done} 节有总结` : ''}` : `${highlights.length} 条划线 · ${notes.length + highlights.filter((m) => m.note).length} 条笔记`),
             h('button', { type: 'button', className: 'dr-nav', 'aria-label': '关闭目录', onClick: onClose }, h(Icon, { name: 'close' }))),
           h('input', { className: 'dr-toc-search', placeholder: tab === 'toc' ? '搜章名或序号' : '搜划线或想法', value: query, autoFocus: !NARROW.matches, onChange: (e) => setQuery(e.target.value) }),
-          tab === 'notes' ? h(NotesList, { rows, highlights, query: q, onLocate: (m) => { onLocate(m); onClose() } }) : h(React.Fragment, null,
+          tab === 'notes' ? h(NotesList, { rows, highlights, notes, chapter: index, query: q, saveNote, removeNote, onLocate: (m) => { onLocate(m); onClose() } }) : h(React.Fragment, null,
           h('div', { className: 'dr-toc-progress' },
             h('div', null, h('span', null, `读到 ${index + 1} / ${total || '…'}`), h('span', null, `${percent}%`)),
             h('i', null, h('b', { style: { width: `${percent}%` } }))),
@@ -972,12 +995,41 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                 })))))
     }
 
-    /** 笔记: every highlight of the book in reading order, grouped by chapter; a click goes to it. */
-    function NotesList({ rows, highlights, query, onLocate }) {
+    /** Where a whole-book note was written: 读到第 n 节 · 10/24 16:01. */
+    const noteMeta = (n) => [n.chapter === null || n.chapter === undefined ? null : `读到第 ${n.chapter + 1} 节`, formatTime(Date.parse(n.createdAt))].filter(Boolean).join(' · ')
+
+    /**
+     * Notes about the whole book (not on any quote): 写笔记, and each note with 修改 / 删除.
+     * `chapter` is where the user is reading now, saved with a new note; null when not reading this book.
+     */
+    function BookNotes({ notes, chapter, save, remove }) {
+      const [editing, setEditing] = useState(null) // 'new' or a note id
+      const context = chapter === null ? null : `写于读到第 ${chapter + 1} 节`
+      return h('div', { className: 'dr-booknotes' },
+        editing === 'new' ? h('div', { className: 'dr-booknote dr-booknote-edit' },
+          h(NoteEditor, { context, placeholder: '关于整本书的笔记…', onCancel: () => setEditing(null), onSave: (text) => { if (text.trim()) save(null, text); setEditing(null) } }))
+          : h('button', { type: 'button', className: 'dr-booknote-add', onClick: () => setEditing('new') }, h(Icon, { name: 'plus', size: 14 }), '写笔记'),
+        notes.map((n) => editing === n.id
+          ? h('div', { key: n.id, className: 'dr-booknote dr-booknote-edit' },
+            h(NoteEditor, { initial: n.note, context: noteMeta(n), onCancel: () => setEditing(null), onSave: (text) => { if (text.trim()) save(n.id, text); setEditing(null) } }))
+          : h('div', { key: n.id, className: 'dr-booknote' },
+            h('p', null, n.note),
+            h('div', { className: 'dr-booknote-foot' },
+              h('span', null, noteMeta(n)),
+              h('button', { type: 'button', onClick: () => setEditing(n.id) }, '修改'),
+              h('button', { type: 'button', onClick: () => { if (window.confirm('删除这条笔记？')) remove(n.id) } }, '删除')))))
+    }
+
+    /** 笔记: notes about the whole book first, then every highlight in reading order, grouped by chapter. */
+    function NotesList({ rows, highlights, notes, chapter, query, onLocate, saveNote, removeNote }) {
       const shown = query ? highlights.filter((m) => m.quote.includes(query) || m.note?.includes(query)) : highlights
-      if (highlights.length === 0) return h('p', { className: 'dr-note dr-notes-empty' }, '还没有划线。选中正文里的文字，就能划线或写想法。')
-      if (shown.length === 0) return h('p', { className: 'dr-note dr-notes-empty' }, '没有匹配的划线。')
-      return h('div', { className: 'dr-toc-list dr-notes' }, shown.flatMap((m, i) => [
+      const loose = query ? notes.filter((n) => n.note.includes(query)) : notes
+      return h('div', { className: 'dr-toc-list dr-notes' },
+        h('div', { className: 'dr-toc-vol' }, '整本书'),
+        h(BookNotes, { notes: loose, chapter, save: saveNote, remove: removeNote }),
+        highlights.length === 0 ? h('p', { className: 'dr-note dr-notes-empty' }, '还没有划线。选中正文里的文字，就能划线或写想法。')
+          : shown.length === 0 ? h('p', { className: 'dr-note dr-notes-empty' }, '没有匹配的划线。')
+            : shown.flatMap((m, i) => [
         m.chapter === shown[i - 1]?.chapter ? null : h('div', { key: `c${m.chapter}`, className: 'dr-toc-vol' }, `${m.chapter + 1} · ${rows[m.chapter]?.name ?? ''}`),
         h('button', { key: m.id, type: 'button', className: 'dr-notes-item', onClick: () => onLocate(m) },
           h('span', { className: 'dr-notes-quote' + (m.by === 'agent' ? ' dr-hl-agent' : '') }, plainQuote(m.quote)),
@@ -1089,7 +1141,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const [drawer, setDrawer] = useState(false)
       const [toc, setToc] = useState(null)
       const [chapter, setChapter] = useState(null)
-      const [highlights, setHighlights] = useState([])
+      const [marks, setMarks] = useState({ highlights: [], notes: [] })
+      const { highlights, notes } = marks
       const marksVersion = useSignal(marksChanged)
       // The selection toolbar, or a card: a new note on the selection, or one highlight opened by a click.
       const [selection, setSelection] = useState(null)
@@ -1110,7 +1163,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         rpc('chapter', { bookId, index }).then(setChapter)
       }, [bookId, index])
       // Reload on the agent's add/remove (binding.marks) and on our own changes.
-      useEffect(() => { rpc('highlights', { bookId }).then(setHighlights, () => setHighlights([])) }, [bookId, binding.marks, marksVersion])
+      useEffect(() => { rpc('highlights', { bookId }).then(setMarks, () => setMarks({ highlights: [], notes: [] })) }, [bookId, binding.marks, marksVersion])
       // Bring the agent's passage to the middle of the page once its chapter is on screen.
       useEffect(() => {
         if (chapter === null || chapter.index !== index || !anchor) return
@@ -1149,6 +1202,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         navigator.clipboard?.writeText(plainQuote(quote)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200) }, () => setFailure('复制失败'))
       }
       const ask = (quote) => { onAsk(plainQuote(quote)); clearSelection(); setCard(null) }
+      const saveNote = (id, note) => run(rpc('book-note-save', { bookId, id, note, chapter: index }))
+      const removeNote = (id) => run(rpc('book-note-remove', { bookId, id }))
       // A click on a highlight (not the end of a selection) opens it; overlapping ones open the shortest.
       const onArticleClick = (event) => {
         const hit = event.target.closest?.('[data-ids]')
@@ -1172,6 +1227,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('span', { className: 'dr-grow' }),
           h('button', { type: 'button', className: 'dr-nav', title: '上一章', 'aria-label': '上一章', disabled: index <= 0, onClick: () => onMove(index - 1) }, h(Icon, { name: 'left' })),
           h('button', { type: 'button', className: 'dr-nav', title: '下一章', 'aria-label': '下一章', disabled: index >= count - 1, onClick: () => onMove(index + 1) }, h(Icon, { name: 'right' })),
+          h('button', { type: 'button', className: 'dr-nav', title: '写笔记（关于整本书）', 'aria-label': '写笔记', onClick: (e) => setCard({ kind: 'book', rect: e.currentTarget.getBoundingClientRect() }) }, h(Icon, { name: 'note' })),
           h('button', { type: 'button', className: 'dr-btn', title: '阅读设置', 'aria-label': '阅读设置', 'aria-expanded': panel, onClick: () => setPanel((open) => !open), style: { fontFamily: FONTS.song.stack, fontWeight: 600 } }, 'Aa'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onShowChat }, '对话'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '合上')),
@@ -1207,8 +1263,14 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
               h('button', { type: 'button', className: 'dr-link', onClick: () => ask(opened.quote) }, '问 Agent'),
               opened.by === 'agent' ? h('span', { className: 'dr-note' }, 'Agent 划的') : null),
           })) : null,
+        card?.kind === 'book' ? h(Floating, { rect: card.rect, className: 'dr-pop' },
+          h(NoteEditor, {
+            context: `关于整本书 · 写于读到第 ${index + 1} 节`, placeholder: '这本书让你想到什么…',
+            onCancel: () => setCard(null),
+            onSave: (note) => { if (note.trim()) saveNote(null, note); setCard(null) },
+          })) : null,
         failure ? h('div', { className: 'dr-toast', role: 'alert', onClick: () => setFailure(null) }, failure) : null,
-        drawer ? h(TocDrawer, { rpc, bookId, index, agentIndex, highlights, onPick: onMove, onLocate, onClose: () => setDrawer(false) }) : null,
+        drawer ? h(TocDrawer, { rpc, bookId, index, agentIndex, highlights, notes, saveNote, removeNote, onPick: onMove, onLocate, onClose: () => setDrawer(false) }) : null,
         panel ? h(TypographyPanel, { onClose: () => setPanel(false) }) : null)
     }
 
