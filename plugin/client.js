@@ -276,8 +276,9 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 .dr-sheet-foot .dr-grow{flex:1}
 .dr-sheet .dr-pop-cancel,.dr-sheet .dr-pop-save{height:34px;padding:0 18px;font-size:14px}
 @media (max-width:767px){.dr-sheet{padding:20px 18px 16px;max-height:92vh}.dr-sheet-text{font-size:16px}}
-/* Below 768px DSH draws the right column fullscreen over the reader; the skin's glass panel lets the page show through. */
-@media (max-width:767px){body.dsh-reader-shell-active [data-slot="rightbar"] [class$="_panel"]{background:var(--dr-solid)}}
+/* Below 768px DSH draws the right column fullscreen over the reader; the skin's glass pane lets the page show through.
+   Paint the pane, which slides off-screen when collapsed, never the panel: that one spans the screen even while collapsed. */
+@media (max-width:767px){body.dsh-reader-shell-active [data-slot="rightbar"] [class*="_tabHost_"]{background:var(--dr-solid)}}
 .dr-dialog-head h3{margin:0;font-size:16px;flex:1}
 .dr-dialog-list{overflow:auto;display:flex;flex-direction:column;gap:8px}
 .dr-error{color:#e5484d;font-size:12px;margin:0}
