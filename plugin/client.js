@@ -94,7 +94,7 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-toc-now{background:var(--dsw-alias-bg-module-platform);font-weight:650}
 .dr-toc-now .dr-toc-n,.dr-toc-now .dr-toc-tag{color:var(--dsw-alias-label-primary)}
 .dr-dock{display:flex;justify-content:center;gap:8px;width:100%;max-width:var(--dsh-composer-card-max-width,780px);box-sizing:border-box;margin:0 auto;padding:8px 12px 0}
-.dr-dock-btn{border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary) 40%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 10%,transparent);color:var(--dsw-alias-brand-primary);cursor:pointer;padding:3px 9px;border-radius:7px;font:inherit;font-size:12px;font-weight:650}
+.dr-dock-btn{white-space:nowrap;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary) 40%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 10%,transparent);color:var(--dsw-alias-brand-primary);cursor:pointer;padding:3px 9px;border-radius:7px;font:inherit;font-size:12px;font-weight:650}
 .dr-dock-btn:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-brand-primary) 20%,transparent)}
 .dr-dock-btn:disabled{opacity:.5;cursor:default}
 .dr-toc-row .dr-toc-agent{color:var(--dsw-alias-label-primary);font-weight:600}
@@ -1412,14 +1412,24 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       })
     }
 
-    /** Above the composer, like tavern's 生成候选项: jump the reader to the chapter the agent last read. */
-    function AgentJump({ app, sessionId }) {
+    /** Sent as is by the dock's quick button: the request typed most often while reading. */
+    const NEXT_SUMMARY_PROMPT = '继续总结下一章，说人话'
+
+    /**
+     * Above the composer, like tavern's 生成候选项: send 继续总结下一章 in one click, and jump the
+     * reader to the chapter the agent last read.
+     */
+    function AgentDock({ app, sessionId }) {
       const binding = useBinding(app.store, sessionId)
-      const agentIndex = binding?.agentPositions?.[binding.bookId]
-      if (!binding?.bookId || agentIndex === undefined) return null
+      if (!binding?.bookId) return null
+      const agentIndex = binding.agentPositions?.[binding.bookId]
       const here = agentIndex === (binding.chapter ?? 0)
       return h('div', { className: 'dr-dock' },
         h('button', {
+          type: 'button', className: 'dr-dock-btn', title: `发送「${NEXT_SUMMARY_PROMPT}」`,
+          onClick: () => app.sendPrompt(sessionId, NEXT_SUMMARY_PROMPT),
+        }, '继续总结下一章'),
+        agentIndex === undefined ? null : h('button', {
           type: 'button', className: 'dr-dock-btn', disabled: here,
           title: here ? '你和 Agent 在读同一节' : '阅读区跳到 Agent 最近读的那一节',
           onClick: () => app.store.bind(sessionId, { chapter: agentIndex }),
@@ -1485,6 +1495,16 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             }
             app.openChat()
           },
+          /** Send a message as the user, queued behind a running reply; the composer's draft is left alone. */
+          async sendPrompt(sessionId, text) {
+            try {
+              const result = await ctx.sessions.binding(sessionId).session.prompt([{ type: 'text', text }], 'queue')
+              if (!result?.ok) throw new Error(result?.error?.message ?? '发送失败')
+            } catch (error) {
+              console.warn('dsh-reader: send prompt failed', error)
+              window.alert(`没能发送：${error.message}`)
+            }
+          },
           /** Tavern's 新开游玩, for books: a fresh session in the library workspace, bound before it opens. */
           async startReading(bookId) {
             const { library } = await rpc('info')
@@ -1548,8 +1568,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         })
 
         ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
-          name: 'conversation.input.dock', id: 'dsh-reader-agent-jump', order: -130, label: '跳到 Agent 在读的章节',
-        }, (props) => h(AgentJump, { app, sessionId: props.sessionId }))), 'dsh-reader: agent jump above composer')
+          name: 'conversation.input.dock', id: 'dsh-reader-agent-jump', order: -130, label: '继续总结、跳到 Agent 在读的章节',
+        }, (props) => h(AgentDock, { app, sessionId: props.sessionId }))), 'dsh-reader: dock above composer')
 
         ctx.effect(() => ctx.slots.inject(CHAT_SLOT, () => ctx.slots.register({ name: CHAT_SLOT }, ChatConversation)),
           'dsh-reader: chat conversation')
