@@ -115,11 +115,22 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-tools button{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:52px;padding:6px 8px;border:0;border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
 .dr-tools button:hover{background:rgba(255,255,255,.12)}
 .dr-pop-scrim{position:fixed;inset:0;z-index:19}
-.dr-pop{position:fixed;z-index:20;width:min(340px,calc(100vw - 32px));box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:var(--dr-solid);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2);box-shadow:0 10px 30px rgba(0,0,0,.22);font-size:13px}
+.dr-pop{position:fixed;z-index:20;width:min(360px,calc(100vw - 32px));box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:14px;background:var(--dr-solid);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2);box-shadow:0 12px 36px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.06);font-size:13px}
 .dr-pop-quote{margin:0;max-height:7.5em;overflow:auto;padding:4px 10px;border-left:3px solid var(--dr-hl-line);white-space:pre-line;line-height:1.6;color:var(--dsw-alias-label-secondary)}
-.dr-pop-text{width:100%;box-sizing:border-box;resize:vertical;min-height:64px;padding:8px 10px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:inherit;font:inherit;line-height:1.6}
+.dr-pop-head{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dr-pop-head b{flex:1;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.dr-pop-head b svg{color:var(--dr-hl-line)}
+.dr-pop-text{width:100%;box-sizing:border-box;resize:none;min-height:88px;padding:10px 12px;border-radius:10px;border:1px solid transparent;background:color-mix(in srgb,currentColor 5%,transparent);color:inherit;font:inherit;font-size:14px;line-height:1.7;outline:none;transition:border-color .15s,background .15s}
+.dr-pop-text:focus{border-color:color-mix(in srgb,var(--dr-hl-line) 55%,transparent);background:color-mix(in srgb,currentColor 2%,transparent)}
+.dr-pop-text::placeholder{color:var(--dsw-alias-label-tertiary)}
+.dr-pop-hint{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
+.dr-pop-cancel,.dr-pop-save{height:30px;padding:0 14px;border-radius:8px;font:inherit;font-size:13px;cursor:pointer}
+.dr-pop-cancel{border:0;background:transparent;color:var(--dsw-alias-label-secondary)}
+.dr-pop-cancel:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dr-pop-save{border:0;background:#c56f16;color:#fff;font-weight:600}
+.dr-pop-save:hover:not(:disabled){filter:brightness(1.06)}
+.dr-pop-save:disabled{opacity:.4;cursor:default}
 .dr-pop-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.dr-pop-context{margin:0;font-size:12px;color:var(--dsw-alias-label-tertiary)}
 /* Notes about the whole book: a dashed 写笔记 button, then plain cards with when/where they were written. */
 .dr-booknotes{display:flex;flex-direction:column;gap:8px}
 .dr-notes .dr-booknotes{padding:2px 6px 10px}
@@ -897,21 +908,27 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     }
 
     /** Edits a note: on a quote (a new or existing highlight), or about the whole book (`context` instead). */
-    function NoteEditor({ quote, context, initial, placeholder = '写下你的想法…', onSave, onCancel, extra }) {
+    function NoteEditor({ quote, title, context, initial, placeholder = '写下你的想法…', onSave, onCancel, extra }) {
       const [value, setValue] = useState(initial ?? '')
+      // An empty new note has nothing to save; emptying an existing one clears it.
+      const blank = !value.trim() && !initial
+      const save = () => { if (!blank) onSave(value) }
       return h(React.Fragment, null,
+        title || context ? h('div', { className: 'dr-pop-head' },
+          title ? h('b', null, h(Icon, { name: 'note', size: 14 }), title) : null,
+          context ? h('span', null, context) : null) : null,
         quote ? h('blockquote', { className: 'dr-pop-quote' }, plainQuote(quote)) : null,
-        context ? h('p', { className: 'dr-pop-context' }, context) : null,
         h('textarea', {
-          className: 'dr-pop-text', rows: 3, autoFocus: true, placeholder, value,
+          className: 'dr-pop-text', rows: 4, autoFocus: true, placeholder, value,
           onChange: (e) => setValue(e.target.value),
-          onKeyDown: (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSave(value); if (e.key === 'Escape') onCancel() },
+          onKeyDown: (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save(); if (e.key === 'Escape') onCancel() },
         }),
         extra ? h('div', { className: 'dr-pop-row' }, extra) : null,
         h('div', { className: 'dr-pop-row' },
+          h('span', { className: 'dr-pop-hint' }, '⌘↩ 保存'),
           h('span', { className: 'dr-grow' }),
-          h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: onCancel }, '取消'),
-          h('button', { type: 'button', className: 'dr-btn', onClick: () => onSave(value) }, '保存')))
+          h('button', { type: 'button', className: 'dr-pop-cancel', onClick: onCancel }, '取消'),
+          h('button', { type: 'button', className: 'dr-pop-save', disabled: blank, onClick: save }, '保存')))
     }
 
 
@@ -1004,14 +1021,14 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      */
     function BookNotes({ notes, chapter, save, remove }) {
       const [editing, setEditing] = useState(null) // 'new' or a note id
-      const context = chapter === null ? null : `写于读到第 ${chapter + 1} 节`
+      const context = chapter === null ? null : `读到第 ${chapter + 1} 节`
       return h('div', { className: 'dr-booknotes' },
         editing === 'new' ? h('div', { className: 'dr-booknote dr-booknote-edit' },
-          h(NoteEditor, { context, placeholder: '关于整本书的笔记…', onCancel: () => setEditing(null), onSave: (text) => { if (text.trim()) save(null, text); setEditing(null) } }))
+          h(NoteEditor, { title: '关于整本书', context, placeholder: '这本书让你想到什么…', onCancel: () => setEditing(null), onSave: (text) => { if (text.trim()) save(null, text); setEditing(null) } }))
           : h('button', { type: 'button', className: 'dr-booknote-add', onClick: () => setEditing('new') }, h(Icon, { name: 'plus', size: 14 }), '写笔记'),
         notes.map((n) => editing === n.id
           ? h('div', { key: n.id, className: 'dr-booknote dr-booknote-edit' },
-            h(NoteEditor, { initial: n.note, context: noteMeta(n), onCancel: () => setEditing(null), onSave: (text) => { if (text.trim()) save(n.id, text); setEditing(null) } }))
+            h(NoteEditor, { title: '修改笔记', initial: n.note, context: noteMeta(n), onCancel: () => setEditing(null), onSave: (text) => { if (text.trim()) save(n.id, text); setEditing(null) } }))
           : h('div', { key: n.id, className: 'dr-booknote' },
             h('p', null, n.note),
             h('div', { className: 'dr-booknote-foot' },
@@ -1265,7 +1282,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           })) : null,
         card?.kind === 'book' ? h(Floating, { rect: card.rect, className: 'dr-pop' },
           h(NoteEditor, {
-            context: `关于整本书 · 写于读到第 ${index + 1} 节`, placeholder: '这本书让你想到什么…',
+            title: '关于整本书', context: `读到第 ${index + 1} 节`, placeholder: '这本书让你想到什么…',
             onCancel: () => setCard(null),
             onSave: (note) => { if (note.trim()) saveNote(null, note); setCard(null) },
           })) : null,
