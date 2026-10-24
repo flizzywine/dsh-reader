@@ -22,14 +22,18 @@ else
   echo "skin: dsh-tavern not found at $TAVERN_ROOT, using DSH's own theme"
 fi
 
+# dsh-pocket: phone access (LAN + public tunnel), same version as dsh-tavern's. Its port is set in
+# plugin/cordis.patch.yml so it does not collide with tavern's pocket on 3081.
+POCKET_VERSION=2.12.0
+
 cat > "$PROFILE/package.json" <<JSON
 {
   "name": "dsh-profile-reader",
   "private": true,
-  "dependencies": { "dsh-reader": "link:$ROOT/plugin"$SKIN_DEP },
+  "dependencies": { "dsh-pocket": "$POCKET_VERSION", "dsh-reader": "link:$ROOT/plugin"$SKIN_DEP },
   "dsh": {
     "profile": {
-      "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"$SKIN_BUNDLE, "dsh-reader"],
+      "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-pocket"$SKIN_BUNDLE, "dsh-reader"],
       "patchReload": "live"
     }
   }
@@ -38,6 +42,7 @@ JSON
 [ -f "$PROFILE/cordis.yml" ] || printf '[]\n' > "$PROFILE/cordis.yml"
 [ -f "$PROFILE/cordis.patch.yml" ] || printf '[]\n' > "$PROFILE/cordis.patch.yml"
 ln -sfn "$ROOT/plugin" "$PROFILE/node_modules/dsh-reader"
+dsh plugin --profile reader install
 echo "profile ready: $PROFILE"
 
 # Put the service command beside `dsh` so `dsh-reader start|stop|restart|status|open` works anywhere.

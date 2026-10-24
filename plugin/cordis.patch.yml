@@ -10,3 +10,7 @@
 - id: storage-json
   config:
     root: !!js dshHomePath('profile-data', 'reader', 'storages')
+# dsh-pocket (phone access) proxies this profile on its own port; tavern's pocket keeps 3081.
+- id: dsh-pocket
+  config:
+    port: !!js Number(process.env.DSH_READER_POCKET_PORT || 30161)

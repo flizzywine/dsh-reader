@@ -25,6 +25,7 @@ dsh-reader logs       # 最近的日志
 - 日志和 PID 记录在 `~/.dsh/profile-data/reader/service.log`、`service.json`。
 - 每次启动 DSH 都会生成新的带 token 的地址。浏览器第一次用这个地址进来后会记住登录，之后直接开 `http://127.0.0.1:30160/` 也行，重启后刷新页面就能连上。
 - 改 `client.js` 不用重启，刷新页面即可；改宿主代码要 `dsh-reader restart`。
+- **手机访问**：profile 里装了 [dsh-pocket](https://github.com/shaobeichen/dsh-pocket)。在「设置 → 手机访问」扫二维码，手机和电脑连同一个 Wi-Fi 就能打开，地址是 `http://<电脑局域网 IP>:30161`，要输入访问密码；那一页也能开公网访问。dsh-tavern 的 pocket 占着 3081，所以这里用 30161，可以用 `DSH_READER_POCKET_PORT` 改。访问密码和 tavern 共用（都存在 `~/.dsh/dsh-pocket/`）。
 
 ## 用法
 
