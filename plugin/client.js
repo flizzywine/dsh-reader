@@ -33,6 +33,7 @@ window.__ModuleLoader__.load({
 /* Floating layers (Aa panel, contents, dialogs) must not show the page through. Glass skins make the
    page and menu tokens translucent, so lay the skin's menu colour over the system's opaque canvas:
    the skin still tints the panel, the text underneath never shows. */
+body{--dr-hl-line:rgba(226,132,24,.85);--dr-hl-fill:rgba(255,170,40,.14)}
 body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-base,transparent)) 0 0) Canvas}
 .dr-root{position:relative;display:flex;flex-direction:column;height:100%;min-height:0;background:var(--dsw-alias-bg-base,inherit);color:var(--dsw-alias-label-primary)}
 .dr-bar{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:10px 16px;padding-left:max(16px,var(--dsh-frame-leading-clearance,0px));border-bottom:.5px solid var(--dr-line,var(--dsw-alias-border-l2));font-size:13px;flex:none;background:var(--dr-bg,transparent);color:var(--dr-fg,inherit)}
@@ -106,7 +107,6 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-text .dr-end{text-align:center;text-indent:0;margin-top:3em;font-size:.8em;color:var(--dr-muted,var(--dsw-alias-label-tertiary))}
 .dr-text mark{color:inherit;background:none}
 /* 划线: one colour; the agent's are dashed. dr-flash is show_passage's (and 定位's) passing highlight. */
-.dr-root{--dr-hl-line:rgba(226,132,24,.85);--dr-hl-fill:rgba(255,170,40,.14)}
 .dr-text mark.dr-hl{background:var(--dr-hl-fill);border-bottom:2px solid var(--dr-hl-line);cursor:pointer}
 .dr-text mark.dr-hl-agent{border-bottom-style:dashed}
 .dr-text mark.dr-flash{background:rgba(255,196,0,.28);border-radius:3px;box-shadow:0 0 0 2px rgba(255,196,0,.28);animation:dr-flash 1.6s ease-out 2}
@@ -148,21 +148,48 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-row{display:flex;gap:6px;flex:none}
 .dr-back{align-self:flex-start;display:flex;align-items:center;gap:4px;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;padding:2px 6px 2px 2px;border-radius:6px;cursor:pointer}
 .dr-back:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dr-detail-head h3{margin:0 0 4px;font-size:17px}
-.dr-detail-head p{margin:0;font-size:12px;color:var(--dsw-alias-label-tertiary)}
-.dr-detail-actions{display:flex;flex-wrap:wrap;gap:6px}
 .dr-link{border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px}
-.dr-sum{border-radius:10px;background:color-mix(in srgb,currentColor 6%,transparent)}
-.dr-sum-head:hover{background:color-mix(in srgb,currentColor 5%,transparent);border-radius:10px}
-.dr-sum-head{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:0;background:transparent;color:inherit;font:inherit;font-size:13.5px;text-align:left;cursor:pointer}
-.dr-sum-head .dr-toc-n{width:24px;flex:none;text-align:right;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary);font-size:12px}
-.dr-sum-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
-.dr-mark{display:flex;flex-direction:column;gap:4px;font-size:13.5px}
-.dr-mark-ch{margin-top:6px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
-.dr-mark blockquote{margin:0;white-space:pre-line;padding:6px 10px;border-left:3px solid color-mix(in srgb,var(--dsw-alias-brand-primary) 60%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 8%,transparent);border-radius:0 6px 6px 0;line-height:1.7}
-.dr-mark p{margin:0;padding-left:13px;font-size:12.5px;color:var(--dsw-alias-label-secondary)}
-.dr-mark .dr-link{align-self:flex-start;margin-left:13px}
-.dr-sum-body{padding:0 14px 14px 46px;display:flex;flex-direction:column;gap:8px}
+/* Book detail (书库 → 书名) */
+.dr-bd{gap:14px;padding:16px 18px 32px}
+.dr-bd-head{display:flex;flex-direction:column;gap:6px}
+.dr-bd-head h3{margin:2px 0 0;font-size:19px;line-height:1.35;font-weight:700;letter-spacing:.01em}
+.dr-bd-head>p{margin:0;font-size:12.5px;color:var(--dsw-alias-label-tertiary)}
+.dr-bd-progress{margin-top:6px;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dr-bd-progress div{display:flex;justify-content:space-between}
+.dr-bd-progress i{display:block;height:4px;border-radius:2px;background:color-mix(in srgb,currentColor 12%,transparent);overflow:hidden}
+.dr-bd-progress b{display:block;height:100%;border-radius:2px;background:var(--dr-hl-line)}
+.dr-bd-actions{margin-top:6px;display:flex;gap:8px}
+.dr-bd-tabs{position:sticky;top:0;z-index:1;display:flex;gap:4px;padding:4px;border-radius:10px;border:.5px solid var(--dsw-alias-border-l2);background:var(--dr-solid)}
+.dr-bd-tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;height:30px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;cursor:pointer}
+.dr-bd-tabs button[aria-selected="true"]{background:color-mix(in srgb,currentColor 9%,transparent);color:var(--dsw-alias-label-primary);font-weight:650}
+.dr-bd-tabs em{font-style:normal;font-size:11.5px;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary)}
+.dr-bd-empty{margin:18px 4px;font-size:12.5px;line-height:1.7;color:var(--dsw-alias-label-tertiary);text-align:center}
+.dr-bd-list{display:flex;flex-direction:column;gap:10px}
+.dr-bd-chapter{margin:8px 2px 0;font-size:12px;font-weight:600;color:var(--dsw-alias-label-tertiary)}
+.dr-bd-chapter:first-child{margin-top:0}
+.dr-bd-mark,.dr-bd-note{display:flex;flex-direction:column;gap:8px;padding:12px 14px 10px;border-radius:10px;border:.5px solid var(--dsw-alias-border-l2);background:color-mix(in srgb,currentColor 2.5%,transparent)}
+.dr-bd blockquote{margin:0;padding-left:12px;border-left:2px solid var(--dr-hl-line);white-space:pre-line;font-size:14px;line-height:1.8}
+.dr-bd-agent blockquote{border-left-style:dashed}
+.dr-bd-mark-note{margin:0;display:flex;gap:6px;font-size:13px;line-height:1.65;color:var(--dsw-alias-label-secondary)}
+.dr-bd-mark-note svg{flex:none;margin-top:3px;color:var(--dr-hl-line)}
+.dr-bd-note>p{margin:0;font-size:14px;line-height:1.75;white-space:pre-line}
+.dr-bd-note blockquote{font-size:12.5px;line-height:1.7;color:var(--dsw-alias-label-secondary)}
+.dr-bd-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:4px;font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
+.dr-bd-foot span{flex:1}
+.dr-bd-locate{width:28px;height:28px;margin:-4px -6px -4px 0;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.dr-bd-locate:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dr-bd-tools{display:flex;justify-content:flex-end;gap:4px;margin-bottom:-6px}
+.dr-bd-tool{display:flex;align-items:center;gap:5px;align-self:flex-start;height:28px;padding:0 9px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;cursor:pointer}
+.dr-bd-tool:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dr-bd-sums{border-radius:10px;border:.5px solid var(--dsw-alias-border-l2);overflow:hidden}
+.dr-bd-sum+.dr-bd-sum{border-top:.5px solid var(--dsw-alias-border-l2)}
+.dr-bd-sum-head{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 14px;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;text-align:left;cursor:pointer}
+.dr-bd-sum-head:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dr-bd-n{width:26px;flex:none;text-align:right;font-size:12px;font-variant-numeric:tabular-nums}
+.dr-bd-sum-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;color:var(--dsw-alias-label-primary)}
+.dr-bd-sum-open .dr-bd-sum-head{font-weight:600}
+.dr-bd-sum-body{display:flex;flex-direction:column;gap:6px;padding:2px 16px 14px 52px}
+.dr-bd-sum-body .dr-bd-tool{margin-left:-9px}
 .dr-md{font-size:13px;line-height:1.75;color:var(--dsw-alias-label-primary)}
 .dr-md h4,.dr-md h5{margin:10px 0 4px;font-size:13px;font-weight:650;color:var(--dsw-alias-label-secondary)}
 .dr-md h4:first-child,.dr-md h5:first-child{margin-top:0}
@@ -394,6 +421,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       right: 'M7.5 4.5 13 10l-5.5 5.5',
       close: 'M5 5l10 10M15 5 5 15',
       note: 'M5 3.5h7l3 3v10H5zM8 9.5h4M8 12.5h4',
+      locate: 'M10 3v3M10 14v3M3 10h3M14 10h3M10 7a3 3 0 1 1 0 6 3 3 0 0 1 0-6z',
+      folder: 'M3 6V5a1.5 1.5 0 0 1 1.5-1.5H8l2 2h5.5A1.5 1.5 0 0 1 17 7v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 14.5z',
       pen: 'M3.5 17h13M6 13.5l7.5-7.5 2 2-7.5 7.5H6z',
       copy: 'M7.5 7.5h8.5v8.5H7.5zM4.5 12.5v-8h8',
       chat: 'M4 4.5h12v8.5H9.5L6 16v-3H4z',
@@ -589,51 +618,88 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return h('div', { className: 'dr-md' }, out)
     }
 
-    /** A book's page in 书库: what it is, its 划线, and every summary the agent has written for it. */
+    /** 127.5 万字 for long books; the exact count under ten thousand. */
+    const formatChars = (chars) => chars >= 10000 ? `${(chars / 10000).toFixed(1).replace(/\.0$/, '')} 万字` : `${chars} 字`
+
+    /**
+     * A book's page in 书库: its numbers and three tabs — 高亮 (every highlight), 笔记 (highlights the
+     * user wrote a note on) and 总结 (the agent's summaries).
+     */
     function BookDetail({ app, book, sessionId, binding, onBack, here, fresh }) {
       const [summaries, setSummaries] = useState(null)
       const [highlights, setHighlights] = useState(null)
+      const [toc, setToc] = useState(null)
+      const [tab, setTab] = useState('marks')
       const [open, setOpen] = useState(() => new Set())
       useEffect(() => { app.rpc('summaries', { bookId: book.id }).then(setSummaries, () => setSummaries([])) }, [book.id])
       useEffect(() => { app.rpc('highlights', { bookId: book.id }).then(setHighlights, () => setHighlights([])) }, [book.id])
+      useEffect(() => { app.rpc('toc', { bookId: book.id }).then(setToc, () => {}) }, [book.id])
       const reading = binding?.bookId === book.id
+      const rows = toc ? tocRows(toc.chapters) : []
+      const chapterLabel = (index, title) => `第 ${index + 1} 节 · ${rows[index]?.name ?? tocRows([{ title }])[0].name}`
+      const notes = highlights?.filter((m) => m.note) ?? null
       const toggle = (index) => setOpen((set) => {
         const next = new Set(set)
         next.has(index) ? next.delete(index) : next.add(index)
         return next
       })
       const allOpen = summaries?.length > 0 && summaries.every((s) => open.has(s.index))
-      return h('div', { className: 'dr-lib' },
+      // Same anchor show_passage sets, so the reader highlights the line and scrolls to it.
+      const locate = (m) => app.store.bind(sessionId, { chapter: m.chapter, anchor: { quote: m.quote, at: m.at, prefix: m.prefix, suffix: m.suffix, nonce: Date.now() } })
+      const locateButton = (m) => reading ? h('button', { type: 'button', className: 'dr-bd-locate', title: '在阅读区定位', 'aria-label': '在阅读区定位', onClick: () => locate(m) }, h(Icon, { name: 'locate', size: 15 })) : null
+      const progress = reading ? Math.round(((binding.chapter ?? 0) + 1) / book.chapters * 100) : 0
+      // Items grouped under their chapter, in reading order.
+      const grouped = (list, item) => list.flatMap((m, i) => [
+        m.chapter === list[i - 1]?.chapter ? null : h('div', { key: `c${m.chapter}`, className: 'dr-bd-chapter' }, chapterLabel(m.chapter, m.title)),
+        item(m),
+      ])
+      const empty = (text) => h('p', { className: 'dr-bd-empty' }, text)
+      const tabs = [
+        ['marks', '高亮', highlights?.length],
+        ['notes', '笔记', notes?.length],
+        ['sums', '总结', summaries?.length],
+      ]
+      return h('div', { className: 'dr-lib dr-bd' },
         h('button', { type: 'button', className: 'dr-back', onClick: onBack }, h(Icon, { name: 'left', size: 14 }), '书库'),
-        h('div', { className: 'dr-detail-head' },
+        h('header', { className: 'dr-bd-head' },
           h('h3', null, book.title),
-          h('p', null, `${book.chars.toLocaleString()} 字 · ${book.chapters} 节` + (summaries ? ` · ${summaries.length} 节有总结` : '') + (highlights?.length ? ` · ${highlights.length} 条划线` : '')
-            + (reading ? ` · 正在读第 ${(binding.chapter ?? 0) + 1} 节` : ''))),
-        h('div', { className: 'dr-detail-actions' },
-          reading ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => (binding?.bookId ? fresh(book.id) : here(book.id)) }, binding?.bookId ? '新开阅读' : '打开'),
-          h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => app.rpc('reveal', { bookId: book.id, sub: '总结' }) }, '在 Finder 中打开总结文件夹')),
-        h('div', { className: 'dr-side-label' }, h('span', null, '划线')),
-        highlights === null ? h('p', { className: 'dr-note' }, '读取中…')
-          : highlights.length === 0 ? h('p', { className: 'dr-note' }, '还没有划线。在对话里让 Agent「把这段标一下」，划好的线会出现在这里。')
-            : highlights.map((m, i) => h('div', { key: m.id, className: 'dr-mark' },
-              m.chapter === highlights[i - 1]?.chapter ? null : h('div', { className: 'dr-mark-ch' }, `${m.chapter + 1} · ${tocRows([{ title: m.title }])[0].name}`),
+          h('p', null, `${formatChars(book.chars)} · ${book.chapters} 节`),
+          reading ? h('div', { className: 'dr-bd-progress' },
+            h('div', null, h('span', null, `读到第 ${(binding.chapter ?? 0) + 1} 节`), h('span', null, `${progress}%`)),
+            h('i', null, h('b', { style: { width: `${progress}%` } }))) : null,
+          reading ? null : h('div', { className: 'dr-bd-actions' },
+            h('button', { type: 'button', className: 'dr-btn', onClick: () => (binding?.bookId ? fresh(book.id) : here(book.id)) }, binding?.bookId ? '新开阅读' : '打开阅读'))),
+        h('div', { className: 'dr-bd-tabs', role: 'tablist' }, tabs.map(([id, label, n]) =>
+          h('button', { key: id, type: 'button', role: 'tab', 'aria-selected': tab === id, onClick: () => setTab(id) }, label, n ? h('em', null, n) : null))),
+        tab === 'marks' ? (highlights === null ? empty('读取中…')
+          : highlights.length === 0 ? empty('还没有高亮。读书时选中文字就能划线，也可以让 Agent「把这段标一下」。')
+            : h('div', { className: 'dr-bd-list' }, grouped(highlights, (m) => h('div', { key: m.id, className: 'dr-bd-mark' + (m.by === 'agent' ? ' dr-bd-agent' : '') },
               h('blockquote', null, plainQuote(m.quote)),
-              m.note ? h('p', null, m.note) : null,
-              // Same anchor show_passage sets, so the reader highlights the line and scrolls to it.
-              reading ? h('button', { type: 'button', className: 'dr-link', onClick: () => app.store.bind(sessionId, { chapter: m.chapter, anchor: { quote: m.quote, at: m.at, prefix: m.prefix, suffix: m.suffix, nonce: Date.now() } }) }, '在阅读区定位') : null)),
-        h('div', { className: 'dr-side-label' },
-          h('span', null, '总结'),
-          summaries?.length ? h('button', { type: 'button', className: 'dr-link', onClick: () => setOpen(allOpen ? new Set() : new Set(summaries.map((s) => s.index))) }, allOpen ? '全部收起' : '全部展开') : null),
-        summaries === null ? h('p', { className: 'dr-note' }, '读取中…')
-          : summaries.length === 0 ? h('p', { className: 'dr-note' }, '还没有总结。在对话里让 Agent「把这一节总结一下」或「把前十节都总结了」，写好的总结会出现在这里。')
-            : summaries.map((s) => h('div', { key: s.index, className: 'dr-sum' + (open.has(s.index) ? ' dr-sum-open' : '') },
-              h('button', { type: 'button', className: 'dr-sum-head', 'aria-expanded': open.has(s.index), onClick: () => toggle(s.index) },
-                h('span', { className: 'dr-toc-n' }, s.index + 1),
-                h('span', { className: 'dr-sum-title' }, tocRows([s])[0].name),
-                h(Icon, { name: open.has(s.index) ? 'up' : 'down', size: 14 })),
-              open.has(s.index) ? h('div', { className: 'dr-sum-body' },
-                h(Markdown, { text: s.text.replace(/^#\s+[^\n]*\n+/, '') }),
-                reading ? h('button', { type: 'button', className: 'dr-link', onClick: () => app.store.bind(sessionId, { chapter: s.index }) }, '在阅读区打开这一节') : null) : null)))
+              m.note ? h('p', { className: 'dr-bd-mark-note' }, h(Icon, { name: 'note', size: 13 }), m.note) : null,
+              h('div', { className: 'dr-bd-foot' }, m.by === 'agent' ? h('span', null, 'Agent 划的') : null, locateButton(m))))))
+          : null,
+        tab === 'notes' ? (notes === null ? empty('读取中…')
+          : notes.length === 0 ? empty('还没有笔记。在阅读区选中文字点「写想法」，或者点开一条高亮写下想法。')
+            : h('div', { className: 'dr-bd-list' }, grouped(notes, (m) => h('div', { key: m.id, className: 'dr-bd-note' },
+              h('p', null, m.note),
+              h('blockquote', null, plainQuote(m.quote)),
+              h('div', { className: 'dr-bd-foot' }, locateButton(m))))))
+          : null,
+        tab === 'sums' ? h(React.Fragment, null,
+          h('div', { className: 'dr-bd-tools' },
+            summaries?.length ? h('button', { type: 'button', className: 'dr-bd-tool', onClick: () => setOpen(allOpen ? new Set() : new Set(summaries.map((s) => s.index))) }, h(Icon, { name: allOpen ? 'up' : 'down', size: 14 }), allOpen ? '全部收起' : '全部展开') : null,
+            h('button', { type: 'button', className: 'dr-bd-tool', title: '在 Finder 中打开总结文件夹，方便手改', onClick: () => app.rpc('reveal', { bookId: book.id, sub: '总结' }) }, h(Icon, { name: 'folder', size: 14 }), '总结文件夹')),
+          summaries === null ? empty('读取中…')
+            : summaries.length === 0 ? empty('还没有总结。在对话里让 Agent「把这一节总结一下」或「把前十节都总结了」，写好的总结会出现在这里。')
+              : h('div', { className: 'dr-bd-sums' }, summaries.map((s) => h('div', { key: s.index, className: 'dr-bd-sum' + (open.has(s.index) ? ' dr-bd-sum-open' : '') },
+                h('button', { type: 'button', className: 'dr-bd-sum-head', 'aria-expanded': open.has(s.index), onClick: () => toggle(s.index) },
+                  h('span', { className: 'dr-bd-n' }, s.index + 1),
+                  h('span', { className: 'dr-bd-sum-title' }, rows[s.index]?.name ?? tocRows([s])[0].name),
+                  h(Icon, { name: open.has(s.index) ? 'up' : 'down', size: 14 })),
+                open.has(s.index) ? h('div', { className: 'dr-bd-sum-body' },
+                  h(Markdown, { text: s.text.replace(/^#\s+[^\n]*\n+/, '') }),
+                  reading ? h('button', { type: 'button', className: 'dr-bd-tool', onClick: () => app.store.bind(sessionId, { chapter: s.index }) }, h(Icon, { name: 'locate', size: 14 }), '在阅读区打开这一节') : null) : null))))
+          : null)
     }
 
     /** Right Sidebar 书库 page: one card per book, like tavern's 人物卡库; a card opens the book's page. */
@@ -824,7 +890,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     }
 
 
-    const CHAPTER_PREFIX = /^第[0-9零一二三四五六七八九十百千万两〇]+[章回节]\s*/
+    const CHAPTER_PREFIX = /^第[0-9零一二三四五六七八九十百千万两〇]+[章回节][\s:：、.．·]*/
+    const PART_ONLY = /^（[0-9一二三四五六七八九十]+）$/
     const VOLUME = /^(第[0-9零一二三四五六七八九十百千万两〇]+[卷部集篇][^·]*?) · (.+)$/
 
     /**
@@ -840,7 +907,9 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         const match = VOLUME.exec(chapter.title)
         if (match) volume = match[1].trim()
         const full = match ? match[2] : chapter.title
-        return { ...chapter, index, volume, full, name: full.replace(CHAPTER_PREFIX, '').trim() || full }
+        const name = full.replace(CHAPTER_PREFIX, '').trim()
+        // 「第一章（一）」 split parts: 「（一）」 alone says nothing, so keep the chapter.
+        return { ...chapter, index, volume, full, name: !name || PART_ONLY.test(name) ? full : name }
       })
     }
 
