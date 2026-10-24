@@ -5,6 +5,7 @@
 //   library/<书名>/目录.json                 { title, chapters: [{ title, file, chars }] }
 //   library/<书名>/章节/0001 第一章 xxx.txt
 //   library/<书名>/总结/0001 第一章 xxx.md    written by the agent through save_summary
+//   library/<书名>/划线.json                 { next, highlights: [{ id, chapter, quote, at, note, by, createdAt }] }
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 
@@ -12,6 +13,7 @@ export const SOURCE_FILE = '原文.txt'
 export const TOC_FILE = '目录.json'
 export const CHAPTER_DIR = '章节'
 export const SUMMARY_DIR = '总结'
+export const HIGHLIGHT_FILE = '划线.json'
 
 /** A chapter longer than this is cut into parts; a book without headings is cut into chunks of PART_CHARS. */
 const MAX_CHAPTER_CHARS = 20000
@@ -172,3 +174,34 @@ export async function summarized(library, id) {
 }
 
 export { summaryFile }
+
+async function readHighlightFile(library, id) {
+  try { return JSON.parse(await readFile(join(library, safeName(id), HIGHLIGHT_FILE), 'utf8')) } catch { return {} }
+}
+
+export async function readHighlights(library, id) {
+  return (await readHighlightFile(library, id)).highlights ?? []
+}
+
+/** One write at a time per process, so parallel tool calls never drop each other's highlights. */
+let highlightWrites = Promise.resolve()
+
+/**
+ * Read-modify-write a book's highlights. `change` gets the list (sorted by place in the book
+ * afterwards) and a `newId()` that never reuses a deleted id; it returns whatever the caller wants back.
+ */
+export function updateHighlights(library, id, change) {
+  const work = highlightWrites.then(async () => {
+    const file = await readHighlightFile(library, id)
+    const list = file.highlights ?? []
+    let next = file.next ?? list.reduce((max, h) => Math.max(max, Number(String(h.id).slice(1)) || 0), 0) + 1
+    const result = await change(list, () => `h${next++}`)
+    list.sort((a, b) => a.chapter - b.chapter || a.at - b.at)
+    const path = join(library, safeName(id), HIGHLIGHT_FILE)
+    await writeFile(`${path}.tmp`, JSON.stringify({ next, highlights: list }, null, 2))
+    await rename(`${path}.tmp`, path)
+    return result
+  })
+  highlightWrites = work.catch(() => {})
+  return work
+}

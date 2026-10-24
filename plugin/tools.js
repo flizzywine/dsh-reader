@@ -1,6 +1,6 @@
 // Agent tools for reading sessions. Each resolves the book from the calling session's binding,
 // so the agent never names files; sessions without a book get a plain error.
-import { readChapter, readSummary, readToc, summarized, summaryFile, writeSummary } from './books.js'
+import { readChapter, readHighlights, readSummary, readToc, summarized, summaryFile, updateHighlights, writeSummary } from './books.js'
 
 /** Characters returned per read_chapter call; longer chapters are paged with `offset`. */
 const PAGE_CHARS = 12000
@@ -10,6 +10,22 @@ function text(value) {
     schema: { type: 'string' },
     render: (_args, result) => [{ type: 'text', text: result }],
   }
+}
+
+/** Where `quote` sits in the chapter; quotes must be copied verbatim so the reader can find them again. */
+function locate(chapter, rawQuote) {
+  const quote = String(rawQuote ?? '').trim()
+  const at = quote ? chapter.text.indexOf(quote) : -1
+  if (at < 0) throw new Error(`第 ${chapter.index + 1} 节里找不到这段原文。请从 read_chapter 的结果里逐字复制一小段再试（不要改字、不要跨段落）。`)
+  return { quote, at }
+}
+
+/** Highlight results cap, so a broad search never floods the context. */
+const HIGHLIGHT_LIMIT = 100
+
+function formatHighlight(h, toc) {
+  const title = toc.chapters[h.chapter]?.title ?? ''
+  return `[${h.id}] 第 ${h.chapter + 1} 节「${title}」：${h.quote}${h.note ? `\n    批注：${h.note}` : ''}`
 }
 
 function integer(args, name, fallback) {
@@ -90,9 +106,7 @@ export function readingTools({ library, bindingFor, updateBinding }) {
       async execute(args, exec) {
         const { bookId, sessionId } = await bookOf(exec)
         const chapter = await readChapter(library, bookId, integer(args, 'n') - 1)
-        const quote = String(args?.quote ?? '').trim()
-        const at = chapter.text.indexOf(quote)
-        if (!quote || at < 0) throw new Error(`第 ${chapter.index + 1} 节里找不到这段原文，没有跳转。请从 read_chapter 的结果里逐字复制一小段再试（不要改字、不要跨段落）。`)
+        const { quote, at } = locate(chapter, args?.quote)
         await updateBinding(sessionId, { chapter: chapter.index, anchor: { quote, at, nonce: Date.now() } })
         return `已在阅读区打开第 ${chapter.index + 1} 节「${chapter.title}」，并高亮：${quote}`
       },
@@ -115,6 +129,88 @@ export function readingTools({ library, bindingFor, updateBinding }) {
         if (typeof args?.summary !== 'string' || !args.summary.trim()) throw new Error('summary 不能为空')
         const { file } = await writeSummary(library, bookId, integer(args, 'n') - 1, args.summary)
         return `已写入 ${file}`
+      },
+    },
+    {
+      name: 'add_highlight',
+      description: '在第 n 节给一段原文划线（划重点），可附批注。只在用户要求标记、划线、记下某段时调用，不要自己主动划。quote 必须逐字照抄原文（不跨段落）。同一段再划一次会更新批注。划线按书保存，换个对话也能查到。',
+      parameters: {
+        type: 'object',
+        properties: {
+          n: { type: 'integer', minimum: 1, description: '节序号，从 1 开始' },
+          quote: { type: 'string', minLength: 2, maxLength: 500, description: '要划线的原文，逐字照抄' },
+          note: { type: 'string', maxLength: 2000, description: '批注，可不填' },
+        },
+        required: ['n', 'quote'],
+        additionalProperties: false,
+      },
+      output: text(),
+      async execute(args, exec) {
+        const { bookId } = await bookOf(exec)
+        const chapter = await readChapter(library, bookId, integer(args, 'n') - 1)
+        const { quote, at } = locate(chapter, args?.quote)
+        const note = typeof args?.note === 'string' ? args.note.trim() : undefined
+        const toc = await readToc(library, bookId)
+        const saved = await updateHighlights(library, bookId, (list, newId) => {
+          const same = list.find((h) => h.chapter === chapter.index && h.quote === quote)
+          if (same) {
+            if (note !== undefined) same.note = note
+            return { highlight: same, updated: true }
+          }
+          const highlight = { id: newId(), chapter: chapter.index, quote, at, note: note ?? '', by: 'agent', createdAt: new Date().toISOString() }
+          list.push(highlight)
+          return { highlight, updated: false }
+        })
+        return `${saved.updated ? '这段已划过，已更新' : '已划线'}：\n${formatHighlight(saved.highlight, toc)}`
+      },
+    },
+    {
+      name: 'find_highlights',
+      description: `检索这本书的划线（重点）。query 匹配原文或批注里的文字；from/to 限定节的范围；都不填就列出全部。最多返回 ${HIGHLIGHT_LIMIT} 条，按书中顺序。用户问「我标过/划过哪些」「之前记的那段」时用。`,
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '关键词，可不填' },
+          from: { type: 'integer', minimum: 1, description: '起始节，可不填' },
+          to: { type: 'integer', minimum: 1, description: '结束节（含），可不填' },
+        },
+        additionalProperties: false,
+      },
+      output: text(),
+      async execute(args, exec) {
+        const { bookId } = await bookOf(exec)
+        const query = String(args?.query ?? '').trim()
+        const from = integer(args, 'from', 1) - 1
+        const to = integer(args, 'to', Number.MAX_SAFE_INTEGER) - 1
+        const all = await readHighlights(library, bookId)
+        const hits = all.filter((h) => h.chapter >= from && h.chapter <= to && (!query || h.quote.includes(query) || h.note?.includes(query)))
+        if (hits.length === 0) return all.length === 0 ? '这本书还没有划线。' : `没有符合条件的划线（全书共 ${all.length} 条）。`
+        const toc = await readToc(library, bookId)
+        const shown = hits.slice(0, HIGHLIGHT_LIMIT).map((h) => formatHighlight(h, toc))
+        const more = hits.length > HIGHLIGHT_LIMIT ? `\n\n[还有 ${hits.length - HIGHLIGHT_LIMIT} 条没列出，请缩小范围或换关键词]` : ''
+        return `找到 ${hits.length} 条划线（全书共 ${all.length} 条）：\n\n${shown.join('\n')}${more}`
+      },
+    },
+    {
+      name: 'remove_highlight',
+      description: '删除一条划线。id 来自 find_highlights 或 add_highlight 的结果（形如 h12）。只在用户要求时删除。',
+      parameters: {
+        type: 'object',
+        properties: { id: { type: 'string', description: '划线 id' } },
+        required: ['id'],
+        additionalProperties: false,
+      },
+      output: text(),
+      async execute(args, exec) {
+        const { bookId } = await bookOf(exec)
+        const id = String(args?.id ?? '').trim()
+        const toc = await readToc(library, bookId)
+        const removed = await updateHighlights(library, bookId, (list) => {
+          const i = list.findIndex((h) => h.id === id)
+          return i < 0 ? null : list.splice(i, 1)[0]
+        })
+        if (!removed) throw new Error(`没有 id 为 ${id} 的划线`)
+        return `已删除：\n${formatHighlight(removed, toc)}`
       },
     },
     {
