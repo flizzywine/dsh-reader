@@ -92,6 +92,7 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-toc-read{color:var(--dsw-alias-label-tertiary)}
 .dr-toc-now{background:var(--dsw-alias-bg-module-platform);font-weight:650}
 .dr-toc-now .dr-toc-n,.dr-toc-now .dr-toc-tag{color:var(--dsw-alias-label-primary)}
+.dr-toc-row .dr-toc-agent{color:var(--dsw-alias-label-primary);font-weight:600}
 .dr-page{flex:1;overflow:auto;min-height:0;background:var(--dr-bg,transparent)}
 .dr-text{box-sizing:content-box;max-width:var(--dr-measure,36em);margin:0 auto;padding:40px 28px 120px;font-family:var(--dr-font);font-size:var(--dr-size,18px);line-height:var(--dr-leading,1.9);color:var(--dr-fg,inherit);text-align:justify;text-justify:inter-character;word-break:break-word;hyphens:auto;font-feature-settings:"palt" 0}
 .dr-text h2{font-size:1.4em;line-height:1.4;font-weight:600;margin:0 0 1.6em;text-align:left;letter-spacing:.02em}
@@ -684,7 +685,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     }
 
     /** 目录: slides over the left of the reader, like an e-reader's contents panel. */
-    function TocDrawer({ rpc, bookId, index, onPick, onClose }) {
+    function TocDrawer({ rpc, bookId, index, agentIndex, onPick, onClose }) {
       const [toc, setToc] = useState(null)
       const [query, setQuery] = useState('')
       const list = useRef(null)
@@ -729,7 +730,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                   },
                   h('span', { className: 'dr-toc-n' }, row.index + 1),
                   h('span', { className: 'dr-toc-t' }, row.name),
-                  now ? h('span', { className: 'dr-toc-tag' }, '在读')
+                  row.index === agentIndex ? h('span', { className: 'dr-toc-tag dr-toc-agent', title: 'Agent 最近读的一节' }, now ? '在读 · Agent' : 'Agent') : null,
+                  now ? (row.index === agentIndex ? null : h('span', { className: 'dr-toc-tag' }, '在读'))
                     : row.summarized ? h('span', { className: 'dr-toc-tag', title: '已有总结' }, h(Icon, { name: 'note', size: 14 })) : null))
                   return out
                 }))))
@@ -841,6 +843,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const page = useRef(null)
       const index = binding.chapter ?? 0
       const anchor = binding.anchor ?? null
+      const agentIndex = binding.agentPositions?.[binding.bookId]
       useEffect(() => { rpc('toc', { bookId: binding.bookId }).then(setToc) }, [binding.bookId])
       useEffect(() => {
         setChapter(null)
@@ -861,6 +864,11 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             h('em', null, `${index + 1} / ${count || '…'}`),
             current ? h('span', null, current.name) : null),
           h('span', { className: 'dr-grow' }),
+          agentIndex === undefined ? null : h('button', {
+            type: 'button', className: 'dr-btn', disabled: agentIndex === index,
+            title: agentIndex === index ? 'Agent 最近读的也是这一节' : `跳到 Agent 最近读的第 ${agentIndex + 1} 节`,
+            onClick: () => onMove(agentIndex),
+          }, `Agent · ${agentIndex + 1}`),
           h('button', { type: 'button', className: 'dr-nav', title: '上一章', 'aria-label': '上一章', disabled: index <= 0, onClick: () => onMove(index - 1) }, h(Icon, { name: 'left' })),
           h('button', { type: 'button', className: 'dr-nav', title: '下一章', 'aria-label': '下一章', disabled: index >= count - 1, onClick: () => onMove(index + 1) }, h(Icon, { name: 'right' })),
           h('button', { type: 'button', className: 'dr-btn', title: '阅读设置', 'aria-label': '阅读设置', 'aria-expanded': panel, onClick: () => setPanel((open) => !open), style: { fontFamily: FONTS.song.stack, fontWeight: 600 } }, 'Aa'),
@@ -873,7 +881,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
               ...renderBlocks(blocks(chapter.text.replace(/\r/g, ''), chapter.title), anchor),
               h('p', { key: 'end', className: 'dr-end' }, index >= count - 1 ? '全书完' : `本节完 · 下一节「${toc ? tocRows(toc.chapters)[index + 1]?.name ?? '' : ''}」`),
             ])),
-        drawer ? h(TocDrawer, { rpc, bookId: binding.bookId, index, onPick: onMove, onClose: () => setDrawer(false) }) : null,
+        drawer ? h(TocDrawer, { rpc, bookId: binding.bookId, index, agentIndex, onPick: onMove, onClose: () => setDrawer(false) }) : null,
         panel ? h(TypographyPanel, { onClose: () => setPanel(false) }) : null)
     }
 

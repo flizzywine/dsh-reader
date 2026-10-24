@@ -22,7 +22,7 @@ function integer(args, name, fallback) {
  * @param {object} deps
  * @param {string} deps.library - library root.
  * @param {(sessionId: string) => Promise<{ bookId: string, chapter?: number } | null>} deps.bindingFor
- * @param {(sessionId: string, patch: object) => Promise<object>} deps.updateBinding - moves the reader.
+ * @param {(sessionId: string, patch: object) => Promise<object>} deps.updateBinding - moves the reader, or records the agent's place.
  */
 export function readingTools({ library, bindingFor, updateBinding }) {
   async function bookOf(exec) {
@@ -39,10 +39,11 @@ export function readingTools({ library, bindingFor, updateBinding }) {
       parameters: { type: 'object', properties: {}, additionalProperties: false },
       output: text(),
       async execute(_args, exec) {
-        const { bookId, chapter = 0 } = await bookOf(exec)
+        const { bookId, chapter = 0, agentPositions } = await bookOf(exec)
         const toc = await readToc(library, bookId)
         const done = await summarized(library, bookId)
-        const lines = toc.chapters.map((c, i) => `${i + 1}. ${c.title}（${c.chars} 字）${done.has(summaryFile(c)) ? ' ✓总结' : ''}${i === chapter ? ' ← 用户正在读' : ''}`)
+        const mine = agentPositions?.[bookId]
+        const lines = toc.chapters.map((c, i) => `${i + 1}. ${c.title}（${c.chars} 字）${done.has(summaryFile(c)) ? ' ✓总结' : ''}${i === chapter ? ' ← 用户正在读' : ''}${i === mine ? ' ← 你上次读到' : ''}`)
         return [`《${toc.title}》共 ${toc.chapters.length} 节，${toc.chars} 字。用户正在读第 ${chapter + 1} 节。`, ...lines].join('\n')
       },
     },
@@ -60,8 +61,10 @@ export function readingTools({ library, bindingFor, updateBinding }) {
       },
       output: text(),
       async execute(args, exec) {
-        const { bookId } = await bookOf(exec)
+        const { bookId, sessionId } = await bookOf(exec)
         const chapter = await readChapter(library, bookId, integer(args, 'n') - 1)
+        // The reader shows this as the agent's place, so the user can jump to it.
+        await updateBinding(sessionId, { agentChapter: chapter.index })
         const offset = integer(args, 'offset', 0)
         const page = chapter.text.slice(offset, offset + PAGE_CHARS)
         const next = offset + page.length

@@ -142,9 +142,15 @@ async function readJson(req) {
 /** The book a session reads, as stable system text: it changes only when the book does, so the prompt cache holds. */
 /**
  * Apply a binding patch. A session may switch books; each book keeps its own place in
- * `positions`, so switching back resumes where the user left off.
+ * `positions`, so switching back resumes where the user left off. `{ agentChapter }` only
+ * records where the agent last read (per book, in `agentPositions`) and leaves the reader alone.
  */
 function nextBinding(previous = {}, patch) {
+  if (patch.agentChapter !== undefined) {
+    if (!previous.bookId) return previous
+    const agentPositions = { ...previous.agentPositions, [previous.bookId]: patch.agentChapter }
+    return { ...previous, agentPositions, updatedAt: Date.now() }
+  }
   // Turning pages by hand drops the agent's highlight; only show_passage sets one.
   if (patch.anchor === undefined) patch = { ...patch, anchor: null }
   const positions = { ...previous.positions }
