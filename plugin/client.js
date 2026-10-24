@@ -92,6 +92,10 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-toc-read{color:var(--dsw-alias-label-tertiary)}
 .dr-toc-now{background:var(--dsw-alias-bg-module-platform);font-weight:650}
 .dr-toc-now .dr-toc-n,.dr-toc-now .dr-toc-tag{color:var(--dsw-alias-label-primary)}
+.dr-dock{display:flex;justify-content:center;gap:8px;width:100%;max-width:var(--dsh-composer-card-max-width,780px);box-sizing:border-box;margin:0 auto;padding:8px 12px 0}
+.dr-dock-btn{border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary) 40%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 10%,transparent);color:var(--dsw-alias-brand-primary);cursor:pointer;padding:3px 9px;border-radius:7px;font:inherit;font-size:12px;font-weight:650}
+.dr-dock-btn:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-brand-primary) 20%,transparent)}
+.dr-dock-btn:disabled{opacity:.5;cursor:default}
 .dr-toc-row .dr-toc-agent{color:var(--dsw-alias-label-primary);font-weight:600}
 .dr-page{flex:1;overflow:auto;min-height:0;background:var(--dr-bg,transparent)}
 .dr-text{box-sizing:content-box;max-width:var(--dr-measure,36em);margin:0 auto;padding:40px 28px 120px;font-family:var(--dr-font);font-size:var(--dr-size,18px);line-height:var(--dr-leading,1.9);color:var(--dr-fg,inherit);text-align:justify;text-justify:inter-character;word-break:break-word;hyphens:auto;font-feature-settings:"palt" 0}
@@ -864,11 +868,6 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             h('em', null, `${index + 1} / ${count || '…'}`),
             current ? h('span', null, current.name) : null),
           h('span', { className: 'dr-grow' }),
-          agentIndex === undefined ? null : h('button', {
-            type: 'button', className: 'dr-btn', disabled: agentIndex === index,
-            title: agentIndex === index ? 'Agent 最近读的也是这一节' : `跳到 Agent 最近读的第 ${agentIndex + 1} 节`,
-            onClick: () => onMove(agentIndex),
-          }, `Agent · ${agentIndex + 1}`),
           h('button', { type: 'button', className: 'dr-nav', title: '上一章', 'aria-label': '上一章', disabled: index <= 0, onClick: () => onMove(index - 1) }, h(Icon, { name: 'left' })),
           h('button', { type: 'button', className: 'dr-nav', title: '下一章', 'aria-label': '下一章', disabled: index >= count - 1, onClick: () => onMove(index + 1) }, h(Icon, { name: 'right' })),
           h('button', { type: 'button', className: 'dr-btn', title: '阅读设置', 'aria-label': '阅读设置', 'aria-expanded': panel, onClick: () => setPanel((open) => !open), style: { fontFamily: FONTS.song.stack, fontWeight: 600 } }, 'Aa'),
@@ -945,6 +944,20 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         onClose: () => app.store.close(sessionId),
         onShowChat: app.openChat,
       })
+    }
+
+    /** Above the composer, like tavern's 生成候选项: jump the reader to the chapter the agent last read. */
+    function AgentJump({ app, sessionId }) {
+      const binding = useBinding(app.store, sessionId)
+      const agentIndex = binding?.agentPositions?.[binding.bookId]
+      if (!binding?.bookId || agentIndex === undefined) return null
+      const here = agentIndex === (binding.chapter ?? 0)
+      return h('div', { className: 'dr-dock' },
+        h('button', {
+          type: 'button', className: 'dr-dock-btn', disabled: here,
+          title: here ? '你和 Agent 在读同一节' : '阅读区跳到 Agent 最近读的那一节',
+          onClick: () => app.store.bind(sessionId, { chapter: agentIndex }),
+        }, here ? `Agent 也在读第 ${agentIndex + 1} 节` : `跳到 Agent 在读的第 ${agentIndex + 1} 节`))
     }
 
     return {
@@ -1052,6 +1065,10 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             inject: () => ({ app }),
           }, page.body)), `dsh-reader: ${page.title} tab body`)
         })
+
+        ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
+          name: 'conversation.input.dock', id: 'dsh-reader-agent-jump', order: -130, label: '跳到 Agent 在读的章节',
+        }, (props) => h(AgentJump, { app, sessionId: props.sessionId }))), 'dsh-reader: agent jump above composer')
 
         ctx.effect(() => ctx.slots.inject(CHAT_SLOT, () => ctx.slots.register({ name: CHAT_SLOT }, ChatConversation)),
           'dsh-reader: chat conversation')
