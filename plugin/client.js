@@ -129,6 +129,11 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-sum-head{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:0;background:transparent;color:inherit;font:inherit;font-size:13.5px;text-align:left;cursor:pointer}
 .dr-sum-head .dr-toc-n{width:24px;flex:none;text-align:right;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-tertiary);font-size:12px}
 .dr-sum-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.dr-mark{display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+.dr-mark-ch{margin-top:6px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dr-mark blockquote{margin:0;padding:6px 10px;border-left:3px solid color-mix(in srgb,var(--dsw-alias-brand-primary) 60%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 8%,transparent);border-radius:0 6px 6px 0;line-height:1.7}
+.dr-mark p{margin:0;padding-left:13px;font-size:12.5px;color:var(--dsw-alias-label-secondary)}
+.dr-mark .dr-link{align-self:flex-start;margin-left:13px}
 .dr-sum-body{padding:0 14px 14px 46px;display:flex;flex-direction:column;gap:8px}
 .dr-md{font-size:13px;line-height:1.75;color:var(--dsw-alias-label-primary)}
 .dr-md h4,.dr-md h5{margin:10px 0 4px;font-size:13px;font-weight:650;color:var(--dsw-alias-label-secondary)}
@@ -553,11 +558,13 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return h('div', { className: 'dr-md' }, out)
     }
 
-    /** A book's page in 书库: what it is, and every summary the agent has written for it. */
+    /** A book's page in 书库: what it is, its 划线, and every summary the agent has written for it. */
     function BookDetail({ app, book, sessionId, binding, onBack, here, fresh }) {
       const [summaries, setSummaries] = useState(null)
+      const [highlights, setHighlights] = useState(null)
       const [open, setOpen] = useState(() => new Set())
       useEffect(() => { app.rpc('summaries', { bookId: book.id }).then(setSummaries, () => setSummaries([])) }, [book.id])
+      useEffect(() => { app.rpc('highlights', { bookId: book.id }).then(setHighlights, () => setHighlights([])) }, [book.id])
       const reading = binding?.bookId === book.id
       const toggle = (index) => setOpen((set) => {
         const next = new Set(set)
@@ -569,11 +576,20 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         h('button', { type: 'button', className: 'dr-back', onClick: onBack }, h(Icon, { name: 'left', size: 14 }), '书库'),
         h('div', { className: 'dr-detail-head' },
           h('h3', null, book.title),
-          h('p', null, `${book.chars.toLocaleString()} 字 · ${book.chapters} 节` + (summaries ? ` · ${summaries.length} 节有总结` : '')
+          h('p', null, `${book.chars.toLocaleString()} 字 · ${book.chapters} 节` + (summaries ? ` · ${summaries.length} 节有总结` : '') + (highlights?.length ? ` · ${highlights.length} 条划线` : '')
             + (reading ? ` · 正在读第 ${(binding.chapter ?? 0) + 1} 节` : ''))),
         h('div', { className: 'dr-detail-actions' },
           reading ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => (binding?.bookId ? fresh(book.id) : here(book.id)) }, binding?.bookId ? '新开阅读' : '打开'),
           h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => app.rpc('reveal', { bookId: book.id, sub: '总结' }) }, '在 Finder 中打开总结文件夹')),
+        h('div', { className: 'dr-side-label' }, h('span', null, '划线')),
+        highlights === null ? h('p', { className: 'dr-note' }, '读取中…')
+          : highlights.length === 0 ? h('p', { className: 'dr-note' }, '还没有划线。在对话里让 Agent「把这段标一下」，划好的线会出现在这里。')
+            : highlights.map((m, i) => h('div', { key: m.id, className: 'dr-mark' },
+              m.chapter === highlights[i - 1]?.chapter ? null : h('div', { className: 'dr-mark-ch' }, `${m.chapter + 1} · ${tocRows([{ title: m.title }])[0].name}`),
+              h('blockquote', null, m.quote),
+              m.note ? h('p', null, m.note) : null,
+              // Same anchor show_passage sets, so the reader highlights the line and scrolls to it.
+              reading ? h('button', { type: 'button', className: 'dr-link', onClick: () => app.store.bind(sessionId, { chapter: m.chapter, anchor: { quote: m.quote, at: m.at, nonce: Date.now() } }) }, '在阅读区定位') : null)),
         h('div', { className: 'dr-side-label' },
           h('span', null, '总结'),
           summaries?.length ? h('button', { type: 'button', className: 'dr-link', onClick: () => setOpen(allOpen ? new Set() : new Set(summaries.map((s) => s.index))) }, allOpen ? '全部收起' : '全部展开') : null),

@@ -5,7 +5,7 @@ import { dirname, join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { CHAPTER_DIR, SUMMARY_DIR, listBooks, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook } from './books.js'
+import { CHAPTER_DIR, SUMMARY_DIR, listBooks, readHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook } from './books.js'
 import { activePersonaText, managePersona, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 
@@ -80,6 +80,10 @@ async function handleCall(endpoint, payload = {}) {
         if (done.has(summaryFile(chapter))) out.push({ index, title: chapter.title, text: await readSummary(LIBRARY, payload.bookId, index) })
       }
       return out
+    }
+    case 'highlights': {
+      const toc = await readToc(LIBRARY, payload.bookId)
+      return (await readHighlights(LIBRARY, payload.bookId)).map((h) => ({ ...h, title: toc.chapters[h.chapter]?.title ?? '' }))
     }
     case 'reveal': {
       // Show a book's folder (or one of its subfolders) in the file manager on this machine.
