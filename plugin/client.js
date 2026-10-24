@@ -411,7 +411,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         } catch (e) { setError(String(e?.message ?? e)) } finally { setBusy(false) }
       }
       return h(React.Fragment, null,
-        h('input', { ref: input, type: 'file', accept: '.txt,text/plain', multiple: true, hidden: true, onChange: pick }),
+        h('input', { ref: input, type: 'file', accept: '.txt,.epub,text/plain,application/epub+zip', multiple: true, hidden: true, onChange: pick }),
         h('button', { type: 'button', className: className ?? 'dr-btn', disabled: busy, onClick: () => input.current?.click() }, busy ? '导入中…' : label),
         error ? h('p', { className: 'dr-error' }, error) : null)
     }
@@ -437,7 +437,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('div', { className: 'dr-dialog-list' },
             error ? h('p', { className: 'dr-error' }, error)
               : books === null ? h('p', { className: 'dr-note' }, '读取中…')
-                : books.length === 0 ? h('p', { className: 'dr-note' }, '书库是空的，先导入一本 TXT。')
+                : books.length === 0 ? h('p', { className: 'dr-note' }, '书库是空的，先导入一本 TXT 或 EPUB。')
                   : books.map((b) => h('div', { key: b.id, className: 'dr-card' },
                     h('div', { className: 'dr-card-text' },
                       h('div', { className: 'dr-card-title' }, b.title),
@@ -766,7 +766,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         h('div', { className: 'dr-lib-head' },
           h('div', null,
             h('h3', null, '书库'),
-            h('p', null, '导入 TXT，或直接放进 dsh-reader/library/ 目录。点书名看详情和总结。')),
+            h('p', null, '导入 TXT 或 EPUB，或直接放进 dsh-reader/library/ 目录。点书名看详情和总结。')),
           h(ImportButton, { app, className: 'dr-btn dr-btn-line', label: '导入' })),
         failure ? h('p', { className: 'dr-error' }, failure) : null,
         error ? h('p', { className: 'dr-error' }, error)

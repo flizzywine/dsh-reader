@@ -1,7 +1,7 @@
 // Book storage: every book is a visible folder under library/, split once by this program so the
 // agent reads one chapter file at a time instead of the whole novel.
 //
-//   library/<书名>/原文.txt                  the imported text, untouched
+//   library/<书名>/原文.txt / 原文.epub      the imported file, untouched
 //   library/<书名>/目录.json                 { title, chapters: [{ title, file, chars }] }
 //   library/<书名>/章节/0001 第一章 xxx.txt
 //   library/<书名>/总结/0001 第一章 xxx.md    written by the agent through save_summary
@@ -14,8 +14,10 @@
 //                                            (after W3C's TextQuoteSelector) find it again if the text moves.
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
+import { readEpub } from './epub.js'
 
 export const SOURCE_FILE = '原文.txt'
+export const SOURCE_EPUB = '原文.epub'
 export const TOC_FILE = '目录.json'
 export const CHAPTER_DIR = '章节'
 export const SUMMARY_DIR = '总结'
@@ -61,6 +63,15 @@ const partName = (i) => i < CHINESE_DIGITS.length ? CHINESE_DIGITS[i] : String(i
 export function splitBook(text) {
   const marks = [...text.matchAll(HEADING)].map((m) => ({ title: m[1].trim(), at: m.index }))
   if (marks.length === 0) return chunk(text, PART_CHARS).map((piece, i) => ({ title: `第 ${i + 1} 节`, text: piece }))
+  return cutAtMarks(text, marks)
+}
+
+/**
+ * Cut text at chapter starts `[{ title, at }]` (sorted): text before the first one becomes 开篇,
+ * a near-empty part (a 卷 title) merges into the next, and an overlong one is cut into parts.
+ */
+function cutAtMarks(text, marks) {
+  marks = [...marks]
   if (countChars(text.slice(0, marks[0].at)) > 0) marks.unshift({ title: '开篇', at: 0 })
   const raw = marks.map((m, i) => ({ title: m.title, text: text.slice(m.at, marks[i + 1]?.at ?? text.length) }))
   const merged = []
@@ -79,6 +90,23 @@ export function splitBook(text) {
     : chunk(part.text, PART_CHARS).map((piece, i) => ({ title: `${part.title}（${partName(i)}）`, text: piece })))
 }
 
+/** File types a book can be imported from. */
+export const BOOK_TYPES = ['.txt', '.epub']
+
+/**
+ * Read an imported file into `{ title, text, parts, source }`: `title` is the book's own
+ * (EPUB metadata) or null, `source` the file name the original is kept under.
+ */
+export function parseBook(ext, buffer) {
+  if (ext === '.epub') {
+    const { title, text, marks } = readEpub(buffer)
+    // A one-entry contents list says nothing about chapters; look for headings as in a TXT.
+    return { title, text, parts: marks.length > 1 ? cutAtMarks(text, marks) : splitBook(text), source: SOURCE_EPUB }
+  }
+  const text = decode(buffer)
+  return { title: null, text, parts: splitBook(text), source: SOURCE_FILE }
+}
+
 /** File-system safe chapter file stem: `0001 第一章 标题`. */
 function chapterStem(index, title) {
   const clean = title.replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40)
@@ -91,14 +119,12 @@ export function safeName(name) {
   return clean
 }
 
-/** Write 原文 + 章节 + 目录 for a new book folder. Existing chapter files are replaced. */
-export async function writeBook(library, id, buffer) {
+/** Write 原文 + 章节 + 目录 for a new book folder from `parseBook`. Existing chapter files are replaced. */
+export async function writeBook(library, id, buffer, { text, parts, source }) {
   const dir = join(library, id)
-  const text = decode(buffer)
-  const parts = splitBook(text)
   await mkdir(join(dir, CHAPTER_DIR), { recursive: true })
   await mkdir(join(dir, SUMMARY_DIR), { recursive: true })
-  await writeFile(join(dir, SOURCE_FILE), buffer)
+  await writeFile(join(dir, source), buffer)
   const chapters = []
   for (const [i, part] of parts.entries()) {
     const file = `${chapterStem(i, part.title)}.txt`
@@ -111,17 +137,18 @@ export async function writeBook(library, id, buffer) {
 }
 
 /**
- * Move books still lying flat in library/ (`书名.txt`) into their folders.
+ * Move books still lying flat in library/ (`书名.txt`, `书名.epub`) into their folders.
  * @returns a map from the old id (`书名.txt`) to the new folder id, for rewriting bindings.
  */
 export async function migrateFlatBooks(library) {
   const moved = new Map()
   for (const name of await readdir(library)) {
-    if (extname(name).toLowerCase() !== '.txt') continue
+    const ext = extname(name).toLowerCase()
+    if (!BOOK_TYPES.includes(ext)) continue
     const id = safeName(basename(name, extname(name)))
     try { await stat(join(library, id)); continue } catch { /* folder is free */ }
     const buffer = await readFile(join(library, name))
-    await writeBook(library, id, buffer)
+    await writeBook(library, id, buffer, parseBook(ext, buffer))
     await rm(join(library, name))
     moved.set(name, id)
   }

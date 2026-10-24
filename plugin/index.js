@@ -5,7 +5,7 @@ import { dirname, join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook } from './books.js'
+import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, BOOK_TYPES } from './books.js'
 import { activePersonaText, managePersona, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 
@@ -32,14 +32,17 @@ async function writeJsonFile(path, value) {
 
 const readBindings = () => readJsonFile(BINDINGS)
 
-/** Split an uploaded TXT into a new book folder under a free name; returns the new book id. */
+/** Split an uploaded TXT or EPUB into a new book folder under a free name; returns the new book id. */
 async function importBook(name, buffer) {
-  if (extname(String(name ?? '')).toLowerCase() !== '.txt') throw new Error('目前只支持 TXT')
-  const stem = safeName(basename(String(name), extname(String(name))))
+  const ext = extname(String(name ?? '')).toLowerCase()
+  if (!BOOK_TYPES.includes(ext)) throw new Error('目前只支持 TXT 和 EPUB')
+  const book = parseBook(ext, buffer)
+  // An EPUB names itself; its file name is often a download site's.
+  const stem = safeName(book.title || basename(String(name), extname(String(name))))
   for (let n = 1; ; n += 1) {
     const id = n === 1 ? stem : `${stem} (${n})`
     try { await stat(join(LIBRARY, id)) } catch {
-      const toc = await writeBook(LIBRARY, id, buffer)
+      const toc = await writeBook(LIBRARY, id, buffer, book)
       return { id, title: toc.title, chapters: toc.chapters.length }
     }
   }
