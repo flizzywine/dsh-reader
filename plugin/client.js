@@ -632,7 +632,9 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const [tab, setTab] = useState('marks')
       const [open, setOpen] = useState(() => new Set())
       useEffect(() => { app.rpc('summaries', { bookId: book.id }).then(setSummaries, () => setSummaries([])) }, [book.id])
-      useEffect(() => { app.rpc('highlights', { bookId: book.id }).then(setHighlights, () => setHighlights([])) }, [book.id])
+      // Notes written in the reader, and the agent's highlights (binding.marks), show up without reopening.
+      const marksVersion = useSignal(app.marksChanged)
+      useEffect(() => { app.rpc('highlights', { bookId: book.id }).then(setHighlights, () => setHighlights([])) }, [book.id, marksVersion, binding?.marks])
       useEffect(() => { app.rpc('toc', { bookId: book.id }).then(setToc, () => {}) }, [book.id])
       const reading = binding?.bookId === book.id
       const rows = toc ? tocRows(toc.chapters) : []
@@ -1081,14 +1083,14 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             h('button', { type: 'button', onClick: () => typography.set(null) }, '恢复默认'))))
     }
 
-    function Reader({ rpc, binding, onMove, onLocate, onAsk, onClose, onShowChat }) {
+    function Reader({ rpc, binding, marksChanged, onMove, onLocate, onAsk, onClose, onShowChat }) {
       const t = useTypography()
       const [panel, setPanel] = useState(false)
       const [drawer, setDrawer] = useState(false)
       const [toc, setToc] = useState(null)
       const [chapter, setChapter] = useState(null)
       const [highlights, setHighlights] = useState([])
-      const [marksVersion, setMarksVersion] = useState(0)
+      const marksVersion = useSignal(marksChanged)
       // The selection toolbar, or a card: a new note on the selection, or one highlight opened by a click.
       const [selection, setSelection] = useState(null)
       const [card, setCard] = useState(null)
@@ -1139,7 +1141,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         return () => window.removeEventListener('keydown', onKey)
       }, [card])
 
-      const changed = () => setMarksVersion((v) => v + 1)
+      const changed = () => marksChanged.bump()
       const run = (work) => work.then(changed).catch((e) => setFailure(String(e?.message ?? e)))
       const clearSelection = () => { document.getSelection()?.removeAllRanges(); setSelection(null) }
       const mark = (span, note = '') => run(rpc('highlight-add', { bookId, chapter: index, at: span.at, end: span.end, note }).then(clearSelection))
@@ -1269,6 +1271,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         onMove: (chapter) => app.store.bind(sessionId, { chapter }),
         onLocate: (m) => app.store.bind(sessionId, { chapter: m.chapter, anchor: { quote: m.quote, at: m.at, prefix: m.prefix, suffix: m.suffix, nonce: Date.now() } }),
         onAsk: (quote) => app.askAgent(sessionId, quote),
+        marksChanged: app.marksChanged,
         onClose: () => app.store.close(sessionId),
         onShowChat: app.openChat,
       })
@@ -1327,6 +1330,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           sessions: ctx.sessions,
           store: createBindingStore(rpc, closeChat),
           libraryChanged: createSignal(),
+          /** Any highlight or note changed from this page: the reader, its 笔记 tab and 书详情 all reload. */
+          marksChanged: createSignal(),
           personasChanged: createSignal(),
           openChat: () => ctx.sidebarRight.openTab(CHAT_KIND),
           openLibrary: (sessionId) => openPage(LIBRARY_KIND, sessionId),
