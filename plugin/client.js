@@ -345,7 +345,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      * Which book each session reads, shared by the centre, the sidebars and the 书库 tab.
      * `get` returns `undefined` while unknown and `null` for no book.
      */
-    function createBindingStore(rpc, closeChat) {
+    function createBindingStore(rpc) {
       const bindings = new Map()
       const changed = createSignal()
       let loadedAll = false
@@ -369,11 +369,6 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         bind: (sessionId, patch) => rpc('bind', { sessionId, binding: patch }).then((b) => set(sessionId, b)),
         /** A change made elsewhere (the agent's show_passage), delivered by the watch loop. */
         apply: set,
-        close(sessionId) {
-          // Unmount the side composer before the centre one takes the session's editor back.
-          closeChat(sessionId)
-          return rpc('bind', { sessionId, binding: null }).then((b) => set(sessionId, b))
-        },
       }
     }
 
@@ -787,7 +782,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                   h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`
                     + (b.id === current ? ` · 读到第 ${(binding.chapter ?? 0) + 1} 节` : ''))),
                 b.id === current
-                  ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => app.store.close(sessionId) }, '合上')
+                  ? h('span', { className: 'dr-note' }, '在读')
                   : h('div', { className: 'dr-row' },
                     h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '在这个对话里换成这本书', onClick: () => here(b.id) }, current ? '换到这本' : '打开'),
                     current ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '为这本书新开一个对话', onClick: () => fresh(b.id) }, '新开') : null))))
@@ -1218,7 +1213,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             h('button', { type: 'button', onClick: () => typography.set(null) }, '恢复默认'))))
     }
 
-    function Reader({ rpc, binding, marksChanged, onMove, onLocate, onAsk, onClose, onShowChat }) {
+    function Reader({ rpc, binding, marksChanged, onMove, onLocate, onAsk, onShowChat }) {
       const t = useTypography()
       const [panel, setPanel] = useState(false)
       const [drawer, setDrawer] = useState(false)
@@ -1312,8 +1307,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('button', { type: 'button', className: 'dr-nav', title: '下一章', 'aria-label': '下一章', disabled: index >= count - 1, onClick: () => onMove(index + 1) }, h(Icon, { name: 'right' })),
           h('button', { type: 'button', className: 'dr-nav', title: '写随想', 'aria-label': '写随想', onClick: () => setCard({ kind: 'book' }) }, h(Icon, { name: 'note' })),
           h('button', { type: 'button', className: 'dr-btn', title: '阅读设置', 'aria-label': '阅读设置', 'aria-expanded': panel, onClick: () => setPanel((open) => !open), style: { fontFamily: FONTS.song.stack, fontWeight: 600 } }, 'Aa'),
-          h('button', { type: 'button', className: 'dr-btn dr-btn-icon', title: '展开右侧栏：和 Agent 对话', onClick: onShowChat }, h(Icon, { name: 'panel', size: 15 }), '对话'),
-          h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '合上')),
+          h('button', { type: 'button', className: 'dr-btn dr-btn-icon', title: '展开右侧栏：和 Agent 对话', onClick: onShowChat }, h(Icon, { name: 'panel', size: 15 }), '对话')),
         h('div', { className: 'dr-page', key: index, ref: page, onScroll },
           h('article', { className: 'dr-text', ref: article, onClick: onArticleClick },
             !ready ? h('p', { className: 'dr-meta' }, '读取中…') : [
@@ -1416,7 +1410,6 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         onLocate: (m) => app.store.bind(sessionId, { chapter: m.chapter, anchor: { quote: m.quote, at: m.at, prefix: m.prefix, suffix: m.suffix, nonce: Date.now() } }),
         onAsk: (quote) => app.askAgent(sessionId, quote),
         marksChanged: app.marksChanged,
-        onClose: () => app.store.close(sessionId),
         onShowChat: app.openChat,
       })
     }
@@ -1461,11 +1454,6 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           return body.result
         }
         const uiWorkspace = () => { try { return ctx.get('uiWorkspace') } catch { return undefined } }
-        const closeChat = (sessionId) => {
-          for (const tab of ctx.sidebarRight.openTabs.getSnapshot()) {
-            if (tab.kind === CHAT_KIND && tab.sessionId === sessionId) ctx.sidebarRight.close(tab.tabId)
-          }
-        }
         // The right column is per session; with no session open there is nowhere to put a page.
         const openPage = (kind, sessionId) => {
           if (sessionId === undefined) return window.alert('先选一本书开始阅读，再打开这个页面。')
@@ -1485,7 +1473,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         const app = {
           rpc,
           sessions: ctx.sessions,
-          store: createBindingStore(rpc, closeChat),
+          store: createBindingStore(rpc),
           libraryChanged: createSignal(),
           /** Any highlight or note changed from this page: the reader, its 笔记 tab and 书详情 all reload. */
           marksChanged: createSignal(),
