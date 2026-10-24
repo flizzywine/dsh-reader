@@ -5,7 +5,7 @@ import { dirname, join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { CHAPTER_DIR, SUMMARY_DIR, listBooks, readHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook } from './books.js'
+import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook } from './books.js'
 import { activePersonaText, managePersona, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 
@@ -85,6 +85,23 @@ async function handleCall(endpoint, payload = {}) {
       const toc = await readToc(LIBRARY, payload.bookId)
       return (await readHighlights(LIBRARY, payload.bookId)).map((h) => ({ ...h, title: toc.chapters[h.chapter]?.title ?? '' }))
     }
+    // The reader's own highlights: the page sends file offsets, the host cuts the quote.
+    case 'highlight-add': {
+      const { highlight } = await addHighlight(LIBRARY, payload.bookId, { index: payload.chapter, at: payload.at, end: payload.end, by: 'user', note: payload.note ?? '' })
+      return highlight
+    }
+    case 'highlight-note':
+      return updateHighlights(LIBRARY, payload.bookId, (list) => {
+        const found = list.find((h) => h.id === payload.id)
+        if (!found) throw new Error('这条划线已经不在了')
+        found.note = String(payload.note ?? '').trim()
+        return found
+      })
+    case 'highlight-remove':
+      return updateHighlights(LIBRARY, payload.bookId, (list) => {
+        const i = list.findIndex((h) => h.id === payload.id)
+        return i < 0 ? null : list.splice(i, 1)[0]
+      })
     case 'reveal': {
       // Show a book's folder (or one of its subfolders) in the file manager on this machine.
       const dir = join(LIBRARY, safeName(payload.bookId), payload.sub === SUMMARY_DIR ? SUMMARY_DIR : '')
@@ -146,14 +163,21 @@ async function readJson(req) {
 /** The book a session reads, as stable system text: it changes only when the book does, so the prompt cache holds. */
 /**
  * Apply a binding patch. A session may switch books; each book keeps its own place in
- * `positions`, so switching back resumes where the user left off. `{ agentChapter }` only
- * records where the agent last read (per book, in `agentPositions`) and leaves the reader alone.
+ * `positions`, so switching back resumes where the user left off. A patch without `bookId` or
+ * `chapter` is news for the reader, not a page turn, and leaves the reader where it is:
+ * `{ agentChapter }` records where the agent last read (per book, in `agentPositions`);
+ * `{ marks }` tells the reader the book's highlights changed.
  */
 function nextBinding(previous = {}, patch) {
-  if (patch.agentChapter !== undefined) {
+  if (patch.bookId === undefined && patch.chapter === undefined) {
     if (!previous.bookId) return previous
-    const agentPositions = { ...previous.agentPositions, [previous.bookId]: patch.agentChapter }
-    return { ...previous, agentPositions, updatedAt: Date.now() }
+    const next = { ...previous }
+    if (patch.agentChapter !== undefined) {
+      next.agentPositions = { ...previous.agentPositions, [previous.bookId]: patch.agentChapter }
+      next.updatedAt = Date.now()
+    }
+    if (patch.marks !== undefined) next.marks = patch.marks
+    return next
   }
   // Turning pages by hand drops the agent's highlight; only show_passage sets one.
   if (patch.anchor === undefined) patch = { ...patch, anchor: null }

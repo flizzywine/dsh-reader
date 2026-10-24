@@ -104,7 +104,35 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-text p{margin:0 0 .55em;text-indent:2em}
 .dr-text .dr-meta{text-indent:0;font-size:.78em;color:var(--dr-muted,var(--dsw-alias-label-tertiary));margin-bottom:1.2em}
 .dr-text .dr-end{text-align:center;text-indent:0;margin-top:3em;font-size:.8em;color:var(--dr-muted,var(--dsw-alias-label-tertiary))}
-.dr-text mark{color:inherit;background:rgba(255,196,0,.28);border-radius:3px;padding:1px 0;box-shadow:0 0 0 2px rgba(255,196,0,.28);animation:dr-flash 1.6s ease-out 2}
+.dr-text mark{color:inherit;background:none}
+/* 划线: one colour; the agent's are dashed. dr-flash is show_passage's (and 定位's) passing highlight. */
+.dr-root{--dr-hl-line:rgba(226,132,24,.85);--dr-hl-fill:rgba(255,170,40,.14)}
+.dr-text mark.dr-hl{background:var(--dr-hl-fill);border-bottom:2px solid var(--dr-hl-line);cursor:pointer}
+.dr-text mark.dr-hl-agent{border-bottom-style:dashed}
+.dr-text mark.dr-flash{background:rgba(255,196,0,.28);border-radius:3px;box-shadow:0 0 0 2px rgba(255,196,0,.28);animation:dr-flash 1.6s ease-out 2}
+.dr-hl-note{display:inline-flex;vertical-align:super;margin:0 1px;color:var(--dr-hl-line);cursor:pointer;user-select:none;-webkit-user-select:none}
+.dr-tools{position:fixed;z-index:20;display:flex;gap:2px;padding:4px;border-radius:10px;background:#2b2a27;color:#f5f2ea;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:13px}
+.dr-tools button{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:52px;padding:6px 8px;border:0;border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
+.dr-tools button:hover{background:rgba(255,255,255,.12)}
+.dr-pop-scrim{position:fixed;inset:0;z-index:19}
+.dr-pop{position:fixed;z-index:20;width:min(340px,calc(100vw - 32px));box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:var(--dr-solid);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2);box-shadow:0 10px 30px rgba(0,0,0,.22);font-size:13px}
+.dr-pop-quote{margin:0;max-height:7.5em;overflow:auto;padding:4px 10px;border-left:3px solid var(--dr-hl-line);white-space:pre-line;line-height:1.6;color:var(--dsw-alias-label-secondary)}
+.dr-pop-text{width:100%;box-sizing:border-box;resize:vertical;min-height:64px;padding:8px 10px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:inherit;font:inherit;line-height:1.6}
+.dr-pop-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dr-pop-row .dr-note{font-size:12px}
+.dr-pop-row .dr-grow{flex:1}
+.dr-danger{color:#c0392b!important}
+.dr-toast{position:absolute;z-index:21;left:50%;bottom:24px;transform:translateX(-50%);padding:8px 14px;border-radius:8px;background:#2b2a27;color:#f5f2ea;font-size:13px;cursor:pointer}
+.dr-toc-tabs{flex:1;display:flex;gap:14px}
+.dr-toc-tabs button{padding:0;border:0;background:none;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:15px;font-weight:650;cursor:pointer}
+.dr-toc-tabs button[aria-selected="true"]{color:var(--dsw-alias-label-primary)}
+.dr-notes-empty{padding:8px 16px}
+.dr-notes-item{display:flex;flex-direction:column;gap:4px;width:100%;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.dr-notes-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dr-notes-quote{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line;line-height:1.6;padding-left:8px;border-left:2px solid var(--dr-hl-line)}
+.dr-notes-quote.dr-hl-agent{border-left-style:dashed}
+.dr-notes-note{padding-left:10px;color:var(--dsw-alias-label-secondary);font-size:12.5px;white-space:pre-line}
+.dr-notes-by{padding-left:10px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
 @keyframes dr-flash{0%{background:rgba(255,196,0,.6)}100%{background:rgba(255,196,0,.28)}}
 .dr-lib{height:100%;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary)}
 .dr-lib-head{display:flex;align-items:flex-start;gap:8px}
@@ -131,7 +159,7 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-sum-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .dr-mark{display:flex;flex-direction:column;gap:4px;font-size:13.5px}
 .dr-mark-ch{margin-top:6px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
-.dr-mark blockquote{margin:0;padding:6px 10px;border-left:3px solid color-mix(in srgb,var(--dsw-alias-brand-primary) 60%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 8%,transparent);border-radius:0 6px 6px 0;line-height:1.7}
+.dr-mark blockquote{margin:0;white-space:pre-line;padding:6px 10px;border-left:3px solid color-mix(in srgb,var(--dsw-alias-brand-primary) 60%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 8%,transparent);border-radius:0 6px 6px 0;line-height:1.7}
 .dr-mark p{margin:0;padding-left:13px;font-size:12.5px;color:var(--dsw-alias-label-secondary)}
 .dr-mark .dr-link{align-self:flex-start;margin-left:13px}
 .dr-sum-body{padding:0 14px 14px 46px;display:flex;flex-direction:column;gap:8px}
@@ -366,6 +394,9 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       right: 'M7.5 4.5 13 10l-5.5 5.5',
       close: 'M5 5l10 10M15 5 5 15',
       note: 'M5 3.5h7l3 3v10H5zM8 9.5h4M8 12.5h4',
+      pen: 'M3.5 17h13M6 13.5l7.5-7.5 2 2-7.5 7.5H6z',
+      copy: 'M7.5 7.5h8.5v8.5H7.5zM4.5 12.5v-8h8',
+      chat: 'M4 4.5h12v8.5H9.5L6 16v-3H4z',
       up: 'M5 12.5 10 7.5l5 5',
       down: 'M5 7.5 10 12.5l5-5',
     }
@@ -586,10 +617,10 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           : highlights.length === 0 ? h('p', { className: 'dr-note' }, '还没有划线。在对话里让 Agent「把这段标一下」，划好的线会出现在这里。')
             : highlights.map((m, i) => h('div', { key: m.id, className: 'dr-mark' },
               m.chapter === highlights[i - 1]?.chapter ? null : h('div', { className: 'dr-mark-ch' }, `${m.chapter + 1} · ${tocRows([{ title: m.title }])[0].name}`),
-              h('blockquote', null, m.quote),
+              h('blockquote', null, plainQuote(m.quote)),
               m.note ? h('p', null, m.note) : null,
               // Same anchor show_passage sets, so the reader highlights the line and scrolls to it.
-              reading ? h('button', { type: 'button', className: 'dr-link', onClick: () => app.store.bind(sessionId, { chapter: m.chapter, anchor: { quote: m.quote, at: m.at, nonce: Date.now() } }) }, '在阅读区定位') : null)),
+              reading ? h('button', { type: 'button', className: 'dr-link', onClick: () => app.store.bind(sessionId, { chapter: m.chapter, anchor: { quote: m.quote, at: m.at, prefix: m.prefix, suffix: m.suffix, nonce: Date.now() } }) }, '在阅读区定位') : null)),
         h('div', { className: 'dr-side-label' },
           h('span', null, '总结'),
           summaries?.length ? h('button', { type: 'button', className: 'dr-link', onClick: () => setOpen(allOpen ? new Set() : new Set(summaries.map((s) => s.index))) }, allOpen ? '全部收起' : '全部展开') : null),
@@ -666,21 +697,130 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return out
     }
 
-    /** Render blocks; the agent's quote is marked inside the block nearest its file offset. */
-    function renderBlocks(list, anchor) {
-      let target = -1
-      if (anchor?.quote) {
-        const holding = list.map((block, i) => block.text.includes(anchor.quote) ? i : -1).filter((i) => i >= 0)
-        target = holding.sort((a, b) => Math.abs(list[a].at - anchor.at) - Math.abs(list[b].at - anchor.at))[0] ?? -1
+    /**
+     * Where a quote sits in the chapter file now: its saved offset if the text there still matches,
+     * else the copy whose prefix/suffix fit (W3C TextQuoteSelector style), nearest the old offset.
+     */
+    function findQuote(text, { quote, at = 0, prefix, suffix }) {
+      if (!quote) return -1
+      if (text.startsWith(quote, at)) return at
+      const fits = (i) => (!prefix || text.slice(0, i).endsWith(prefix)) && (!suffix || text.startsWith(suffix, i + quote.length))
+      let best = -1
+      for (let i = text.indexOf(quote); i >= 0; i = text.indexOf(quote, i + 1)) {
+        if (best < 0 || fits(i) > fits(best) || (fits(i) === fits(best) && Math.abs(i - at) < Math.abs(best - at))) best = i
       }
+      return best
+    }
+
+    /** Highlights and the agent's show_passage anchor as `{ start, end }` spans of the chapter file. */
+    function placeSpans(text, highlights, anchor) {
+      const spans = []
+      for (const m of highlights) {
+        const start = findQuote(text, m)
+        if (start >= 0) spans.push({ ...m, start, end: start + m.quote.length })
+      }
+      const start = anchor ? findQuote(text, anchor) : -1
+      if (start >= 0) spans.push({ anchor: true, nonce: anchor.nonce, start, end: start + anchor.quote.length })
+      return spans
+    }
+
+    /**
+     * Render blocks with their spans. Each block carries `data-at` (its file offset), so a selection maps
+     * back to file offsets; a span crossing paragraphs is drawn piece by piece in each block it covers.
+     */
+    function renderBlocks(list, spans) {
       return list.map((block, i) => {
         const tag = block.kind === 'sub' ? 'h3' : 'p'
-        const props = { key: i, className: block.kind === 'meta' ? 'dr-meta' : undefined }
-        if (i !== target) return h(tag, props, block.text)
-        const cut = block.text.indexOf(anchor.quote)
-        return h(tag, props, block.text.slice(0, cut),
-          h('mark', { key: anchor.nonce, 'data-dr-anchor': '' }, anchor.quote), block.text.slice(cut + anchor.quote.length))
+        const props = { key: i, className: block.kind === 'meta' ? 'dr-meta' : undefined, 'data-at': block.at }
+        const end = block.at + block.text.length
+        const mine = spans.filter((span) => span.start < end && span.end > block.at)
+        if (mine.length === 0) return h(tag, props, block.text)
+        const cuts = [...new Set([block.at, end, ...mine.flatMap((span) => [span.start, span.end]).filter((x) => x > block.at && x < end)])].sort((a, b) => a - b)
+        const parts = []
+        for (let k = 0; k < cuts.length - 1; k += 1) {
+          const from = cuts[k]
+          const to = cuts[k + 1]
+          const piece = block.text.slice(from - block.at, to - block.at)
+          const over = mine.filter((span) => span.start <= from && span.end >= to)
+          if (over.length === 0) { parts.push(piece); continue }
+          const marks = over.filter((span) => span.id)
+          const anchor = over.find((span) => span.anchor)
+          parts.push(h('mark', {
+            key: `${from}:${anchor?.nonce ?? ''}`,
+            className: [marks.length && 'dr-hl', marks.length && marks.every((m) => m.by === 'agent') && 'dr-hl-agent', anchor && 'dr-flash'].filter(Boolean).join(' '),
+            'data-ids': marks.map((m) => m.id).join(' ') || undefined,
+            'data-dr-anchor': anchor ? '' : undefined,
+          }, piece))
+          // A highlight with a note ends in a small mark; it is not text, so selections skip it.
+          for (const m of marks) {
+            if (m.note && m.end === to) parts.push(h('span', { key: `n${m.id}`, className: 'dr-hl-note', 'data-dr-skip': '', 'data-ids': m.id, title: m.note }, h(Icon, { name: 'note', size: 12 })))
+          }
+        }
+        return h(tag, props, ...parts)
       })
+    }
+
+    /** File offset of a DOM selection point inside the article, or null when it is outside the text. */
+    function pointOffset(article, node, offset) {
+      if (node === article) {
+        // Between blocks (e.g. a triple-click): the next block's start.
+        for (const child of [...article.children].slice(offset)) if (child.dataset.at !== undefined) return Number(child.dataset.at)
+        return null
+      }
+      const block = (node.nodeType === 1 ? node : node.parentElement)?.closest('[data-at]')
+      if (!block || !article.contains(block)) return null
+      const range = document.createRange()
+      range.setStart(block, 0)
+      range.setEnd(node, offset)
+      const before = range.cloneContents()
+      before.querySelectorAll('[data-dr-skip]').forEach((el) => el.remove())
+      return Number(block.dataset.at) + before.textContent.length
+    }
+
+    const SPACE = /[\s\u3000]/
+    /** The selected file span with surrounding blanks and indentation trimmed, or null. */
+    function selectionSpan(article, text) {
+      const sel = document.getSelection()
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null
+      const range = sel.getRangeAt(0)
+      if (!article.contains(range.commonAncestorContainer) && range.commonAncestorContainer !== article) return null
+      let at = pointOffset(article, range.startContainer, range.startOffset)
+      let end = pointOffset(article, range.endContainer, range.endOffset)
+      if (at === null || end === null) return null
+      while (at < end && SPACE.test(text[at])) at += 1
+      while (end > at && SPACE.test(text[end - 1])) end -= 1
+      if (end <= at) return null
+      const rects = [...range.getClientRects()].filter((r) => r.width > 0)
+      return { at, end, rect: rects[0] ?? range.getBoundingClientRect(), last: rects.at(-1) ?? range.getBoundingClientRect() }
+    }
+
+    /** A quote as plain lines, without the book's indentation. */
+    const plainQuote = (quote) => quote.split('\n').map((line) => line.replace(/^[\s\u3000]+|[\s\u3000]+$/g, '')).filter(Boolean).join('\n')
+
+    /** Floats above `rect` (or below it near the top of the window). */
+    function Floating({ rect, below, className, children }) {
+      const up = rect.top > 90
+      const anchor = up ? rect : (below ?? rect)
+      const style = { left: `clamp(150px, ${anchor.left + anchor.width / 2}px, calc(100vw - 150px))`, top: up ? anchor.top - 10 : anchor.bottom + 10, transform: up ? 'translate(-50%, -100%)' : 'translate(-50%, 0)' }
+      // mousedown would clear the text selection before the click lands.
+      return h('div', { className, style, onMouseDown: (e) => { if (e.target.tagName !== 'TEXTAREA') e.preventDefault() } }, children)
+    }
+
+    /** Edits a note: for a new highlight (with its quote) or an existing one. */
+    function NoteEditor({ quote, initial, onSave, onCancel, extra }) {
+      const [value, setValue] = useState(initial ?? '')
+      return h(React.Fragment, null,
+        h('blockquote', { className: 'dr-pop-quote' }, plainQuote(quote)),
+        h('textarea', {
+          className: 'dr-pop-text', rows: 3, autoFocus: true, placeholder: '写下你的想法…', value,
+          onChange: (e) => setValue(e.target.value),
+          onKeyDown: (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSave(value); if (e.key === 'Escape') onCancel() },
+        }),
+        extra ? h('div', { className: 'dr-pop-row' }, extra) : null,
+        h('div', { className: 'dr-pop-row' },
+          h('span', { className: 'dr-grow' }),
+          h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: onCancel }, '取消'),
+          h('button', { type: 'button', className: 'dr-btn', onClick: () => onSave(value) }, '保存')))
     }
 
 
@@ -705,9 +845,10 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     }
 
     /** 目录: slides over the left of the reader, like an e-reader's contents panel. */
-    function TocDrawer({ rpc, bookId, index, agentIndex, onPick, onClose }) {
+    function TocDrawer({ rpc, bookId, index, agentIndex, highlights, onPick, onLocate, onClose }) {
       const [toc, setToc] = useState(null)
       const [query, setQuery] = useState('')
+      const [tab, setTab] = useState('toc')
       const list = useRef(null)
       useEffect(() => { rpc('toc', { bookId }).then(setToc) }, [bookId])
       useEffect(() => {
@@ -728,10 +869,13 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         h('div', { className: 'dr-scrim', onClick: onClose }),
         h('nav', { className: 'dr-toc', 'aria-label': '目录' },
           h('div', { className: 'dr-toc-head' },
-            h('b', null, '目录'),
-            h('span', null, `${total} 节${done ? ` · ${done} 节有总结` : ''}`),
+            h('div', { className: 'dr-toc-tabs', role: 'tablist' },
+              h('button', { type: 'button', role: 'tab', 'aria-selected': tab === 'toc', onClick: () => setTab('toc') }, '目录'),
+              h('button', { type: 'button', role: 'tab', 'aria-selected': tab === 'notes', onClick: () => setTab('notes') }, `笔记${highlights.length ? ` ${highlights.length}` : ''}`)),
+            h('span', null, tab === 'toc' ? `${total} 节${done ? ` · ${done} 节有总结` : ''}` : `${highlights.filter((m) => m.note).length} 条想法`),
             h('button', { type: 'button', className: 'dr-nav', 'aria-label': '关闭目录', onClick: onClose }, h(Icon, { name: 'close' }))),
-          h('input', { className: 'dr-toc-search', placeholder: '搜章名或序号', value: query, autoFocus: !NARROW.matches, onChange: (e) => setQuery(e.target.value) }),
+          h('input', { className: 'dr-toc-search', placeholder: tab === 'toc' ? '搜章名或序号' : '搜划线或想法', value: query, autoFocus: !NARROW.matches, onChange: (e) => setQuery(e.target.value) }),
+          tab === 'notes' ? h(NotesList, { rows, highlights, query: q, onLocate: (m) => { onLocate(m); onClose() } }) : h(React.Fragment, null,
           h('div', { className: 'dr-toc-progress' },
             h('div', null, h('span', null, `读到 ${index + 1} / ${total || '…'}`), h('span', null, `${percent}%`)),
             h('i', null, h('b', { style: { width: `${percent}%` } }))),
@@ -754,7 +898,21 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                   now ? (row.index === agentIndex ? null : h('span', { className: 'dr-toc-tag' }, '在读'))
                     : row.summarized ? h('span', { className: 'dr-toc-tag', title: '已有总结' }, h(Icon, { name: 'note', size: 14 })) : null))
                   return out
-                }))))
+                })))))
+    }
+
+    /** 笔记: every highlight of the book in reading order, grouped by chapter; a click goes to it. */
+    function NotesList({ rows, highlights, query, onLocate }) {
+      const shown = query ? highlights.filter((m) => m.quote.includes(query) || m.note?.includes(query)) : highlights
+      if (highlights.length === 0) return h('p', { className: 'dr-note dr-notes-empty' }, '还没有划线。选中正文里的文字，就能划线或写想法。')
+      if (shown.length === 0) return h('p', { className: 'dr-note dr-notes-empty' }, '没有匹配的划线。')
+      return h('div', { className: 'dr-toc-list dr-notes' }, shown.flatMap((m, i) => [
+        m.chapter === shown[i - 1]?.chapter ? null : h('div', { key: `c${m.chapter}`, className: 'dr-toc-vol' }, `${m.chapter + 1} · ${rows[m.chapter]?.name ?? ''}`),
+        h('button', { key: m.id, type: 'button', className: 'dr-notes-item', onClick: () => onLocate(m) },
+          h('span', { className: 'dr-notes-quote' + (m.by === 'agent' ? ' dr-hl-agent' : '') }, plainQuote(m.quote)),
+          m.note ? h('span', { className: 'dr-notes-note' }, m.note) : null,
+          m.by === 'agent' ? h('span', { className: 'dr-notes-by' }, 'Agent 划的') : null),
+      ]))
     }
 
     /** Reading themes, after the usual e-reader set. `auto` keeps the app's own colours. */
@@ -854,28 +1012,85 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             h('button', { type: 'button', onClick: () => typography.set(null) }, '恢复默认'))))
     }
 
-    function Reader({ rpc, binding, onMove, onClose, onShowChat }) {
+    function Reader({ rpc, binding, onMove, onLocate, onAsk, onClose, onShowChat }) {
       const t = useTypography()
       const [panel, setPanel] = useState(false)
       const [drawer, setDrawer] = useState(false)
       const [toc, setToc] = useState(null)
       const [chapter, setChapter] = useState(null)
+      const [highlights, setHighlights] = useState([])
+      const [marksVersion, setMarksVersion] = useState(0)
+      // The selection toolbar, or a card: a new note on the selection, or one highlight opened by a click.
+      const [selection, setSelection] = useState(null)
+      const [card, setCard] = useState(null)
+      const [copied, setCopied] = useState(false)
+      const [failure, setFailure] = useState(null)
       const page = useRef(null)
+      const article = useRef(null)
       const index = binding.chapter ?? 0
       const anchor = binding.anchor ?? null
       const agentIndex = binding.agentPositions?.[binding.bookId]
-      useEffect(() => { rpc('toc', { bookId: binding.bookId }).then(setToc) }, [binding.bookId])
+      const bookId = binding.bookId
+      useEffect(() => { rpc('toc', { bookId }).then(setToc) }, [bookId])
       useEffect(() => {
         setChapter(null)
-        rpc('chapter', { bookId: binding.bookId, index }).then(setChapter)
-      }, [binding.bookId, index])
+        setSelection(null)
+        setCard(null)
+        rpc('chapter', { bookId, index }).then(setChapter)
+      }, [bookId, index])
+      // Reload on the agent's add/remove (binding.marks) and on our own changes.
+      useEffect(() => { rpc('highlights', { bookId }).then(setHighlights, () => setHighlights([])) }, [bookId, binding.marks, marksVersion])
       // Bring the agent's passage to the middle of the page once its chapter is on screen.
       useEffect(() => {
         if (chapter === null || chapter.index !== index || !anchor) return
         page.current?.querySelector('[data-dr-anchor]')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
       }, [chapter, anchor?.nonce])
+      const ready = chapter !== null && chapter.index === index
+      const text = ready ? chapter.text : ''
+      // Follow the text selection; selectionchange also covers touch and keyboard selections.
+      useEffect(() => {
+        if (!ready) return
+        let timer
+        const update = () => {
+          clearTimeout(timer)
+          timer = setTimeout(() => setSelection(article.current ? selectionSpan(article.current, text) : null), 120)
+        }
+        document.addEventListener('selectionchange', update)
+        return () => { clearTimeout(timer); document.removeEventListener('selectionchange', update) }
+      }, [ready, text])
+      // Floating layers sit at fixed positions: re-place the toolbar on scroll, drop a card.
+      const onScroll = () => {
+        if (selection && article.current) setSelection(selectionSpan(article.current, text))
+        if (card) setCard(null)
+      }
+      useEffect(() => {
+        if (!card) return
+        const onKey = (event) => { if (event.key === 'Escape') setCard(null) }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+      }, [card])
+
+      const changed = () => setMarksVersion((v) => v + 1)
+      const run = (work) => work.then(changed).catch((e) => setFailure(String(e?.message ?? e)))
+      const clearSelection = () => { document.getSelection()?.removeAllRanges(); setSelection(null) }
+      const mark = (span, note = '') => run(rpc('highlight-add', { bookId, chapter: index, at: span.at, end: span.end, note }).then(clearSelection))
+      const copy = (quote) => {
+        navigator.clipboard?.writeText(plainQuote(quote)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200) }, () => setFailure('复制失败'))
+      }
+      const ask = (quote) => { onAsk(plainQuote(quote)); clearSelection(); setCard(null) }
+      // A click on a highlight (not the end of a selection) opens it; overlapping ones open the shortest.
+      const onArticleClick = (event) => {
+        const hit = event.target.closest?.('[data-ids]')
+        if (!hit || !document.getSelection()?.isCollapsed) return
+        const ids = hit.dataset.ids.split(' ')
+        const picked = highlights.filter((m) => ids.includes(m.id)).sort((a, b) => a.quote.length - b.quote.length)[0]
+        if (picked) setCard({ kind: 'mark', id: picked.id, rect: hit.getBoundingClientRect() })
+      }
+
       const count = toc?.chapters.length ?? 0
       const current = toc ? tocRows(toc.chapters)[index] : null
+      const spans = ready ? placeSpans(text, highlights.filter((m) => m.chapter === index), anchor) : []
+      const opened = card?.kind === 'mark' ? highlights.find((m) => m.id === card.id) : null
       return h('div', { className: 'dr-root', 'data-theme': t.theme, style: typographyStyle(t) },
         h('div', { className: 'dr-bar' },
           h('span', { className: 'dr-title' }, toc?.title ?? '…'),
@@ -889,14 +1104,40 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('button', { type: 'button', className: 'dr-btn', title: '阅读设置', 'aria-label': '阅读设置', 'aria-expanded': panel, onClick: () => setPanel((open) => !open), style: { fontFamily: FONTS.song.stack, fontWeight: 600 } }, 'Aa'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onShowChat }, '对话'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '合上')),
-        h('div', { className: 'dr-page', key: index, ref: page },
-          h('article', { className: 'dr-text' },
-            chapter === null || chapter.index !== index ? h('p', { className: 'dr-meta' }, '读取中…') : [
+        h('div', { className: 'dr-page', key: index, ref: page, onScroll },
+          h('article', { className: 'dr-text', ref: article, onClick: onArticleClick },
+            !ready ? h('p', { className: 'dr-meta' }, '读取中…') : [
               h('h2', { key: 't' }, current?.full ?? chapter.title),
-              ...renderBlocks(blocks(chapter.text.replace(/\r/g, ''), chapter.title), anchor),
+              ...renderBlocks(blocks(text, chapter.title), spans),
               h('p', { key: 'end', className: 'dr-end' }, index >= count - 1 ? '全书完' : `本节完 · 下一节「${toc ? tocRows(toc.chapters)[index + 1]?.name ?? '' : ''}」`),
             ])),
-        drawer ? h(TocDrawer, { rpc, bookId: binding.bookId, index, agentIndex, onPick: onMove, onClose: () => setDrawer(false) }) : null,
+        selection && !card ? h(Floating, { rect: selection.rect, below: selection.last, className: 'dr-tools' },
+          h('button', { type: 'button', onClick: () => mark(selection) }, h(Icon, { name: 'pen', size: 15 }), '划线'),
+          h('button', { type: 'button', onClick: () => setCard({ kind: 'new', span: selection, rect: selection.rect, last: selection.last }) }, h(Icon, { name: 'note', size: 15 }), '写想法'),
+          h('button', { type: 'button', onClick: () => copy(text.slice(selection.at, selection.end)) }, h(Icon, { name: 'copy', size: 15 }), copied ? '已复制' : '复制'),
+          h('button', { type: 'button', onClick: () => ask(text.slice(selection.at, selection.end)) }, h(Icon, { name: 'chat', size: 15 }), '问 Agent')) : null,
+        card ? h('div', { className: 'dr-pop-scrim', onMouseDown: () => setCard(null) }) : null,
+        card?.kind === 'new' ? h(Floating, { rect: card.rect, below: card.last, className: 'dr-pop' },
+          h(NoteEditor, {
+            quote: text.slice(card.span.at, card.span.end),
+            onCancel: () => setCard(null),
+            onSave: (note) => { mark(card.span, note); setCard(null) },
+          })) : null,
+        opened ? h(Floating, { rect: card.rect, className: 'dr-pop' },
+          h(NoteEditor, {
+            key: opened.id,
+            quote: opened.quote,
+            initial: opened.note,
+            onCancel: () => setCard(null),
+            onSave: (note) => { run(rpc('highlight-note', { bookId, id: opened.id, note })); setCard(null) },
+            extra: h(React.Fragment, null,
+              h('button', { type: 'button', className: 'dr-link dr-danger', onClick: () => { run(rpc('highlight-remove', { bookId, id: opened.id })); setCard(null) } }, '删除划线'),
+              h('button', { type: 'button', className: 'dr-link', onClick: () => copy(opened.quote) }, copied ? '已复制' : '复制'),
+              h('button', { type: 'button', className: 'dr-link', onClick: () => ask(opened.quote) }, '问 Agent'),
+              opened.by === 'agent' ? h('span', { className: 'dr-note' }, 'Agent 划的') : null),
+          })) : null,
+        failure ? h('div', { className: 'dr-toast', role: 'alert', onClick: () => setFailure(null) }, failure) : null,
+        drawer ? h(TocDrawer, { rpc, bookId, index, agentIndex, highlights, onPick: onMove, onLocate, onClose: () => setDrawer(false) }) : null,
         panel ? h(TypographyPanel, { onClose: () => setPanel(false) }) : null)
     }
 
@@ -957,6 +1198,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return h(Reader, {
         rpc: app.rpc, binding,
         onMove: (chapter) => app.store.bind(sessionId, { chapter }),
+        onLocate: (m) => app.store.bind(sessionId, { chapter: m.chapter, anchor: { quote: m.quote, at: m.at, prefix: m.prefix, suffix: m.suffix, nonce: Date.now() } }),
+        onAsk: (quote) => app.askAgent(sessionId, quote),
         onClose: () => app.store.close(sessionId),
         onShowChat: app.openChat,
       })
@@ -1020,6 +1263,19 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           openLibrary: (sessionId) => openPage(LIBRARY_KIND, sessionId),
           openPersona: (sessionId) => openPage(PERSONA_KIND, sessionId),
           openSession: (sessionId) => uiWorkspace()?.openSession(sessionId),
+          /** 问 Agent: put the passage into this session's composer as a quote, ready for the question. */
+          askAgent(sessionId, quote) {
+            try {
+              const input = ctx.get('conversation').input.for(ctx.sessions.scope(sessionId))
+              const draft = input.state.getSnapshot().draft
+              const block = `${quote.split('\n').map((line) => `> ${line}`).join('\n')}\n\n`
+              input.setDraft(draft.trim() ? `${draft.replace(/\s*$/, '')}\n\n${block}` : block)
+            } catch (error) {
+              console.warn('dsh-reader: ask agent failed', error)
+              window.alert('没能放进输入框，请复制后自己粘贴。')
+            }
+            app.openChat()
+          },
           /** Tavern's 新开游玩, for books: a fresh session in the library workspace, bound before it opens. */
           async startReading(bookId) {
             const { library } = await rpc('info')

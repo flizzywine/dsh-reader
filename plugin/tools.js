@@ -1,6 +1,6 @@
 // Agent tools for reading sessions. Each resolves the book from the calling session's binding,
 // so the agent never names files; sessions without a book get a plain error.
-import { readChapter, readHighlights, readSummary, readToc, summarized, summaryFile, updateHighlights, writeSummary } from './books.js'
+import { addHighlight, readChapter, readHighlights, readSummary, readToc, summarized, summaryFile, updateHighlights, writeSummary } from './books.js'
 
 /** Characters returned per read_chapter call; longer chapters are paged with `offset`. */
 const PAGE_CHARS = 12000
@@ -25,7 +25,8 @@ const HIGHLIGHT_LIMIT = 100
 
 function formatHighlight(h, toc) {
   const title = toc.chapters[h.chapter]?.title ?? ''
-  return `[${h.id}] 第 ${h.chapter + 1} 节「${title}」：${h.quote}${h.note ? `\n    用户批注：${h.note}` : ''}`
+  const quote = h.quote.replace(/[\s\u3000]*\n[\s\u3000]*/g, ' / ').trim()
+  return `[${h.id}]${h.by === 'user' ? '（用户划的）' : ''} 第 ${h.chapter + 1} 节「${title}」：${quote}${h.note ? `\n    用户的想法：${h.note}` : ''}`
 }
 
 function integer(args, name, fallback) {
@@ -145,23 +146,18 @@ export function readingTools({ library, bindingFor, updateBinding }) {
       },
       output: text(),
       async execute(args, exec) {
-        const { bookId } = await bookOf(exec)
+        const { bookId, sessionId } = await bookOf(exec)
         const chapter = await readChapter(library, bookId, integer(args, 'n') - 1)
         const { quote, at } = locate(chapter, args?.quote)
-        const toc = await readToc(library, bookId)
-        const saved = await updateHighlights(library, bookId, (list, newId) => {
-          const same = list.find((h) => h.chapter === chapter.index && h.quote === quote)
-          if (same) return { highlight: same, updated: true }
-          const highlight = { id: newId(), chapter: chapter.index, quote, at, note: '', by: 'agent', createdAt: new Date().toISOString() }
-          list.push(highlight)
-          return { highlight, updated: false }
-        })
-        return `${saved.updated ? '这段已经划过了' : '已划线'}：\n${formatHighlight(saved.highlight, toc)}`
+        const saved = await addHighlight(library, bookId, { index: chapter.index, at, end: at + quote.length, by: 'agent' })
+        // Tell the open reader to redraw its highlights.
+        if (!saved.existed) await updateBinding(sessionId, { marks: Date.now() })
+        return `${saved.existed ? '这段已经划过了' : '已划线'}：\n${formatHighlight(saved.highlight, await readToc(library, bookId))}`
       },
     },
     {
       name: 'find_highlights',
-      description: `检索这本书的划线（重点）。query 匹配原文或用户批注里的文字；from/to 限定节的范围；都不填就列出全部。最多返回 ${HIGHLIGHT_LIMIT} 条，按书中顺序。用户问「我标过/划过哪些」「之前记的那段」时用。`,
+      description: `检索这本书的划线（重点）。query 匹配原文或用户想法里的文字；from/to 限定节的范围；都不填就列出全部。最多返回 ${HIGHLIGHT_LIMIT} 条，按书中顺序。用户问「我标过/划过哪些」「之前记的那段」时用。`,
       parameters: {
         type: 'object',
         properties: {
@@ -197,7 +193,7 @@ export function readingTools({ library, bindingFor, updateBinding }) {
       },
       output: text(),
       async execute(args, exec) {
-        const { bookId } = await bookOf(exec)
+        const { bookId, sessionId } = await bookOf(exec)
         const id = String(args?.id ?? '').trim()
         const toc = await readToc(library, bookId)
         const removed = await updateHighlights(library, bookId, (list) => {
@@ -205,6 +201,7 @@ export function readingTools({ library, bindingFor, updateBinding }) {
           return i < 0 ? null : list.splice(i, 1)[0]
         })
         if (!removed) throw new Error(`没有 id 为 ${id} 的划线`)
+        await updateBinding(sessionId, { marks: Date.now() })
         return `已删除：\n${formatHighlight(removed, toc)}`
       },
     },

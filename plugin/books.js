@@ -5,7 +5,9 @@
 //   library/<书名>/目录.json                 { title, chapters: [{ title, file, chars }] }
 //   library/<书名>/章节/0001 第一章 xxx.txt
 //   library/<书名>/总结/0001 第一章 xxx.md    written by the agent through save_summary
-//   library/<书名>/划线.json                 { next, highlights: [{ id, chapter, quote, at, note, by, createdAt }] }
+//   library/<书名>/划线.json                 { next, highlights: [{ id, chapter, at, quote, prefix, suffix, note, by, createdAt }] }
+//                                            `at` is the quote's offset in the chapter file; prefix/suffix
+//                                            (after W3C's TextQuoteSelector) find it again if the text moves.
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 
@@ -144,10 +146,15 @@ function chapterAt(toc, index) {
   return chapter
 }
 
+/**
+ * A chapter's text with line endings made \n. Offsets everywhere (read_chapter paging, highlights,
+ * the reader's selection) count in this text, so CRLF files and the page agree.
+ */
 export async function readChapter(library, id, index) {
   const toc = await readToc(library, id)
   const chapter = chapterAt(toc, index)
-  return { ...chapter, index, text: await readFile(join(library, id, CHAPTER_DIR, chapter.file), 'utf8') }
+  const text = await readFile(join(library, id, CHAPTER_DIR, chapter.file), 'utf8')
+  return { ...chapter, index, text: text.replace(/\r\n?/g, '\n') }
 }
 
 const summaryFile = (chapter) => chapter.file.replace(/\.txt$/, '.md')
@@ -204,4 +211,29 @@ export function updateHighlights(library, id, change) {
   })
   highlightWrites = work.catch(() => {})
   return work
+}
+
+/** Characters of context kept on each side of a highlight. */
+const CONTEXT_CHARS = 16
+
+/**
+ * Highlight chapter `index` from `at` to `end` (file offsets; may span paragraphs). Marking the same
+ * span again returns the existing highlight. `by` is 'user' or 'agent'; only the user writes notes.
+ */
+export async function addHighlight(library, id, { index, at, end, by, note = '' }) {
+  const chapter = await readChapter(library, id, index)
+  if (!Number.isInteger(at) || !Number.isInteger(end) || at < 0 || end > chapter.text.length || end <= at) throw new Error('划线范围不对')
+  const quote = chapter.text.slice(at, end)
+  if (!quote.trim()) throw new Error('不能给空白划线')
+  return updateHighlights(library, id, (list, newId) => {
+    const same = list.find((h) => h.chapter === index && h.at === at && h.quote === quote)
+    if (same) return { highlight: same, existed: true }
+    const highlight = {
+      id: newId(), chapter: index, at, quote,
+      prefix: chapter.text.slice(Math.max(0, at - CONTEXT_CHARS), at), suffix: chapter.text.slice(end, end + CONTEXT_CHARS),
+      note: String(note).trim(), by, createdAt: new Date().toISOString(),
+    }
+    list.push(highlight)
+    return { highlight, existed: false }
+  })
 }
