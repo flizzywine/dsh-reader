@@ -25,7 +25,7 @@ const HIGHLIGHT_LIMIT = 100
 
 function formatHighlight(h, toc) {
   const title = toc.chapters[h.chapter]?.title ?? ''
-  return `[${h.id}] 第 ${h.chapter + 1} 节「${title}」：${h.quote}${h.note ? `\n    批注：${h.note}` : ''}`
+  return `[${h.id}] 第 ${h.chapter + 1} 节「${title}」：${h.quote}${h.note ? `\n    用户批注：${h.note}` : ''}`
 }
 
 function integer(args, name, fallback) {
@@ -133,13 +133,12 @@ export function readingTools({ library, bindingFor, updateBinding }) {
     },
     {
       name: 'add_highlight',
-      description: '在第 n 节给一段原文划线（划重点），可附批注。只在用户要求标记、划线、记下某段时调用，不要自己主动划。quote 必须逐字照抄原文（不跨段落）。同一段再划一次会更新批注。划线按书保存，换个对话也能查到。',
+      description: '在第 n 节给一段原文划线（划重点）。只在用户要求标记、划线时调用，不要自己主动划。划线只是标出原文，不写评语或笔记；笔记由用户自己记。quote 必须逐字照抄原文（不跨段落）。划线按书保存，换个对话也能查到。',
       parameters: {
         type: 'object',
         properties: {
           n: { type: 'integer', minimum: 1, description: '节序号，从 1 开始' },
           quote: { type: 'string', minLength: 2, maxLength: 500, description: '要划线的原文，逐字照抄' },
-          note: { type: 'string', maxLength: 2000, description: '批注，可不填' },
         },
         required: ['n', 'quote'],
         additionalProperties: false,
@@ -149,24 +148,20 @@ export function readingTools({ library, bindingFor, updateBinding }) {
         const { bookId } = await bookOf(exec)
         const chapter = await readChapter(library, bookId, integer(args, 'n') - 1)
         const { quote, at } = locate(chapter, args?.quote)
-        const note = typeof args?.note === 'string' ? args.note.trim() : undefined
         const toc = await readToc(library, bookId)
         const saved = await updateHighlights(library, bookId, (list, newId) => {
           const same = list.find((h) => h.chapter === chapter.index && h.quote === quote)
-          if (same) {
-            if (note !== undefined) same.note = note
-            return { highlight: same, updated: true }
-          }
-          const highlight = { id: newId(), chapter: chapter.index, quote, at, note: note ?? '', by: 'agent', createdAt: new Date().toISOString() }
+          if (same) return { highlight: same, updated: true }
+          const highlight = { id: newId(), chapter: chapter.index, quote, at, note: '', by: 'agent', createdAt: new Date().toISOString() }
           list.push(highlight)
           return { highlight, updated: false }
         })
-        return `${saved.updated ? '这段已划过，已更新' : '已划线'}：\n${formatHighlight(saved.highlight, toc)}`
+        return `${saved.updated ? '这段已经划过了' : '已划线'}：\n${formatHighlight(saved.highlight, toc)}`
       },
     },
     {
       name: 'find_highlights',
-      description: `检索这本书的划线（重点）。query 匹配原文或批注里的文字；from/to 限定节的范围；都不填就列出全部。最多返回 ${HIGHLIGHT_LIMIT} 条，按书中顺序。用户问「我标过/划过哪些」「之前记的那段」时用。`,
+      description: `检索这本书的划线（重点）。query 匹配原文或用户批注里的文字；from/to 限定节的范围；都不填就列出全部。最多返回 ${HIGHLIGHT_LIMIT} 条，按书中顺序。用户问「我标过/划过哪些」「之前记的那段」时用。`,
       parameters: {
         type: 'object',
         properties: {

@@ -212,7 +212,7 @@ const READING_SECTION = [
   '- 读完一节可以用 save_summary 写总结；回顾前情先用 read_summaries 读总结，不够再回原文。',
   `- 每本书是工作区里的一个文件夹：\`<书名>/${CHAPTER_DIR}/\` 是分好的章节，\`<书名>/${SUMMARY_DIR}/\` 是总结；跨章搜索可以直接 grep 章节目录。`,
   '- 用户想看某段情节时，先用 grep 或 read_chapter 找到它，再用 show_passage 让阅读区跳过去并高亮。',
-  '- 用户要求标记、划重点时，用 add_highlight 划线（可附批注）；不要自己主动划。用户问起划过的内容时，用 find_highlights 检索。',
+  '- 用户要求标记、划重点时，用 add_highlight 划线，只标原文、不写评语，笔记由用户自己记；不要自己主动划。用户问起划过的内容时，用 find_highlights 检索。',
   '- 用户还没读到的部分算剧透：除非用户要求，不要透露当前节之后的情节。',
 ].join('\n')
 

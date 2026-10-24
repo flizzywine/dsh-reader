@@ -61,7 +61,7 @@ library/<书名>/原文.txt          导入的原文，不改动
 library/<书名>/目录.json         每节的标题、文件名、字数
 library/<书名>/章节/0001 ….txt   分好的章节
 library/<书名>/总结/0001 ….md    Agent 写的总结，可以手改
-library/<书名>/划线.json         划线和批注
+library/<书名>/划线.json         划线（批注字段留给用户自己写）
 ```
 
 分章规则：
@@ -80,8 +80,8 @@ library/<书名>/划线.json         划线和批注
 | `save_summary(n, summary)` | 把第 n 节的总结写进 `总结/` 文件夹（覆盖旧的） |
 | `read_summaries(from, to)` | 批量读总结，用来回顾前情 |
 | `show_passage(n, quote)` | 让阅读区跳到第 n 节，高亮并滚动到这段原文；原文对不上就报错、不跳转 |
-| `add_highlight(n, quote, note?)` | 给第 n 节的一段原文划线，可附批注；同一段再划会更新批注。只在用户要求时划 |
-| `find_highlights(query?, from?, to?)` | 按关键词（匹配原文或批注）和节范围检索划线 |
+| `add_highlight(n, quote)` | 给第 n 节的一段原文划线。只在用户要求时划，只标原文、不写笔记 |
+| `find_highlights(query?, from?, to?)` | 按关键词（匹配原文或用户批注）和节范围检索划线 |
 | `remove_highlight(id)` | 删除一条划线 |
 
 划线按书存在 `library/<书名>/划线.json`，换个对话也能查到，也可以手改。书详情页能看到所有划线；阅读区里显示划线、选中文字划线和批注，以后再做。
