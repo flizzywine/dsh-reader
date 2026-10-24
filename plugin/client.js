@@ -138,7 +138,6 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-booknote-add:hover{border-color:var(--dr-hl-line);color:var(--dsw-alias-label-primary)}
 .dr-booknote{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:9px;background:color-mix(in srgb,var(--dr-hl-line) 7%,transparent);border:.5px solid color-mix(in srgb,var(--dr-hl-line) 25%,transparent)}
 .dr-booknote>p{margin:0;font-size:13.5px;line-height:1.75;white-space:pre-line}
-.dr-booknote-edit{gap:8px;background:transparent}
 .dr-booknote-foot{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
 .dr-booknote-foot span{flex:1}
 .dr-booknote-foot button{padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer}
@@ -264,6 +263,19 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 .dr-overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px}
 .dr-dialog{width:min(640px,100%);max-height:min(720px,90vh);display:flex;flex-direction:column;gap:12px;padding:20px;border-radius:14px;background:var(--dr-solid);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2)}
 .dr-dialog-head{display:flex;align-items:center;gap:8px}
+/* The whole-book note sheet: a writing pad, not a popover. */
+.dr-sheet-overlay{background:rgba(20,16,10,.38);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:dr-fade .15s ease-out}
+.dr-sheet{width:min(720px,100%);max-height:min(820px,88vh);box-sizing:border-box;display:flex;flex-direction:column;gap:16px;padding:26px 32px 20px;border-radius:18px;background:var(--dr-solid);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2);box-shadow:0 24px 70px rgba(0,0,0,.28)}
+.dr-sheet-head{display:flex;align-items:baseline;gap:12px;padding-bottom:14px;border-bottom:.5px solid var(--dsw-alias-border-l2)}
+.dr-sheet-head b{flex:1;display:flex;align-items:center;gap:8px;font-size:17px;font-weight:650}
+.dr-sheet-head b svg{color:var(--dr-hl-line)}
+.dr-sheet-head span{font-size:12.5px;color:var(--dsw-alias-label-tertiary)}
+.dr-sheet-text{flex:1;width:100%;min-height:min(320px,40vh);max-height:60vh;box-sizing:border-box;overflow:auto;resize:none;padding:4px 2px;border:0;outline:none;background:transparent;color:inherit;font-size:17px;line-height:1.95;letter-spacing:.01em}
+.dr-sheet-text::placeholder{color:var(--dsw-alias-label-tertiary)}
+.dr-sheet-foot{display:flex;align-items:center;gap:8px;padding-top:12px;border-top:.5px solid var(--dsw-alias-border-l2);font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dr-sheet-foot .dr-grow{flex:1}
+.dr-sheet .dr-pop-cancel,.dr-sheet .dr-pop-save{height:34px;padding:0 18px;font-size:14px}
+@media (max-width:767px){.dr-sheet{padding:20px 18px 16px;max-height:92vh}.dr-sheet-text{font-size:16px}}
 .dr-dialog-head h3{margin:0;font-size:16px;flex:1}
 .dr-dialog-list{overflow:auto;display:flex;flex-direction:column;gap:8px}
 .dr-error{color:#e5484d;font-size:12px;margin:0}
@@ -1012,6 +1024,48 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                 })))))
     }
 
+    /**
+     * A writing sheet for notes about the whole book: centred over the window, wide and tall, in the
+     * reading font, because these notes are thoughts and want room, not a popover.
+     */
+    function NoteSheet({ title, context, initial = '', placeholder, onSave, onClose }) {
+      const t = useTypography()
+      const [value, setValue] = useState(initial)
+      const text = useRef(null)
+      const blank = !value.trim()
+      const dirty = value !== initial
+      const close = () => { if (!dirty || window.confirm('还没保存，确定不要了？')) onClose() }
+      const save = () => { if (!blank) onSave(value) }
+      // Grow with the text up to the sheet's height, so long thoughts are not read through a slot.
+      useEffect(() => {
+        const el = text.current
+        if (!el) return
+        el.style.height = 'auto'
+        el.style.height = `${el.scrollHeight}px`
+      }, [value])
+      useEffect(() => {
+        const el = text.current
+        el?.focus()
+        el?.setSelectionRange(el.value.length, el.value.length)
+      }, [])
+      return createPortal(h('div', { className: 'dr-overlay dr-sheet-overlay', onPointerDown: (e) => { if (e.target === e.currentTarget) close() } },
+        h('div', { className: 'dr-sheet', role: 'dialog', 'aria-label': title },
+          h('div', { className: 'dr-sheet-head' },
+            h('b', null, h(Icon, { name: 'note', size: 17 }), title),
+            context ? h('span', null, context) : null),
+          h('textarea', {
+            ref: text, className: 'dr-sheet-text', placeholder, value,
+            style: { fontFamily: (FONTS[t.font] ?? FONTS.song).stack },
+            onChange: (e) => setValue(e.target.value),
+            onKeyDown: (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save(); if (e.key === 'Escape') { e.stopPropagation(); close() } },
+          }),
+          h('div', { className: 'dr-sheet-foot' },
+            h('span', null, `${value.replace(/\s/g, '').length} 字 · ⌘↩ 保存 · Esc 关闭`),
+            h('span', { className: 'dr-grow' }),
+            h('button', { type: 'button', className: 'dr-pop-cancel', onClick: close }, '取消'),
+            h('button', { type: 'button', className: 'dr-pop-save', disabled: blank || !dirty, onClick: save }, '保存')))), document.body)
+    }
+
     /** Where a whole-book note was written: 读到第 n 节 · 10/24 16:01. */
     const noteMeta = (n) => [n.chapter === null || n.chapter === undefined ? null : `读到第 ${n.chapter + 1} 节`, formatTime(Date.parse(n.createdAt))].filter(Boolean).join(' · ')
 
@@ -1021,15 +1075,18 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      */
     function BookNotes({ notes, chapter, save, remove }) {
       const [editing, setEditing] = useState(null) // 'new' or a note id
-      const context = chapter === null ? null : `读到第 ${chapter + 1} 节`
+      const editingNote = notes.find((n) => n.id === editing)
       return h('div', { className: 'dr-booknotes' },
-        editing === 'new' ? h('div', { className: 'dr-booknote dr-booknote-edit' },
-          h(NoteEditor, { title: '关于整本书', context, placeholder: '这本书让你想到什么…', onCancel: () => setEditing(null), onSave: (text) => { if (text.trim()) save(null, text); setEditing(null) } }))
-          : h('button', { type: 'button', className: 'dr-booknote-add', onClick: () => setEditing('new') }, h(Icon, { name: 'plus', size: 14 }), '写笔记'),
-        notes.map((n) => editing === n.id
-          ? h('div', { key: n.id, className: 'dr-booknote dr-booknote-edit' },
-            h(NoteEditor, { title: '修改笔记', initial: n.note, context: noteMeta(n), onCancel: () => setEditing(null), onSave: (text) => { if (text.trim()) save(n.id, text); setEditing(null) } }))
-          : h('div', { key: n.id, className: 'dr-booknote' },
+        h('button', { type: 'button', className: 'dr-booknote-add', onClick: () => setEditing('new') }, h(Icon, { name: 'plus', size: 14 }), '写笔记'),
+        editing === 'new' ? h(NoteSheet, {
+          title: '关于整本书', context: chapter === null ? null : `读到第 ${chapter + 1} 节`, placeholder: '这本书让你想到什么…',
+          onClose: () => setEditing(null), onSave: (text) => { save(null, text); setEditing(null) },
+        }) : null,
+        editingNote ? h(NoteSheet, {
+          key: editingNote.id, title: '修改笔记', context: noteMeta(editingNote), initial: editingNote.note,
+          onClose: () => setEditing(null), onSave: (text) => { save(editingNote.id, text); setEditing(null) },
+        }) : null,
+        notes.map((n) => h('div', { key: n.id, className: 'dr-booknote' },
             h('p', null, n.note),
             h('div', { className: 'dr-booknote-foot' },
               h('span', null, noteMeta(n)),
@@ -1244,7 +1301,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('span', { className: 'dr-grow' }),
           h('button', { type: 'button', className: 'dr-nav', title: '上一章', 'aria-label': '上一章', disabled: index <= 0, onClick: () => onMove(index - 1) }, h(Icon, { name: 'left' })),
           h('button', { type: 'button', className: 'dr-nav', title: '下一章', 'aria-label': '下一章', disabled: index >= count - 1, onClick: () => onMove(index + 1) }, h(Icon, { name: 'right' })),
-          h('button', { type: 'button', className: 'dr-nav', title: '写笔记（关于整本书）', 'aria-label': '写笔记', onClick: (e) => setCard({ kind: 'book', rect: e.currentTarget.getBoundingClientRect() }) }, h(Icon, { name: 'note' })),
+          h('button', { type: 'button', className: 'dr-nav', title: '写笔记（关于整本书）', 'aria-label': '写笔记', onClick: () => setCard({ kind: 'book' }) }, h(Icon, { name: 'note' })),
           h('button', { type: 'button', className: 'dr-btn', title: '阅读设置', 'aria-label': '阅读设置', 'aria-expanded': panel, onClick: () => setPanel((open) => !open), style: { fontFamily: FONTS.song.stack, fontWeight: 600 } }, 'Aa'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onShowChat }, '对话'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '合上')),
@@ -1260,7 +1317,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('button', { type: 'button', onClick: () => setCard({ kind: 'new', span: selection, rect: selection.rect, last: selection.last }) }, h(Icon, { name: 'note', size: 15 }), '写想法'),
           h('button', { type: 'button', onClick: () => copy(text.slice(selection.at, selection.end)) }, h(Icon, { name: 'copy', size: 15 }), copied ? '已复制' : '复制'),
           h('button', { type: 'button', onClick: () => ask(text.slice(selection.at, selection.end)) }, h(Icon, { name: 'chat', size: 15 }), '问 Agent')) : null,
-        card ? h('div', { className: 'dr-pop-scrim', onMouseDown: () => setCard(null) }) : null,
+        card && card.kind !== 'book' ? h('div', { className: 'dr-pop-scrim', onMouseDown: () => setCard(null) }) : null,
         card?.kind === 'new' ? h(Floating, { rect: card.rect, below: card.last, className: 'dr-pop' },
           h(NoteEditor, {
             quote: text.slice(card.span.at, card.span.end),
@@ -1280,12 +1337,11 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
               h('button', { type: 'button', className: 'dr-link', onClick: () => ask(opened.quote) }, '问 Agent'),
               opened.by === 'agent' ? h('span', { className: 'dr-note' }, 'Agent 划的') : null),
           })) : null,
-        card?.kind === 'book' ? h(Floating, { rect: card.rect, className: 'dr-pop' },
-          h(NoteEditor, {
-            title: '关于整本书', context: `读到第 ${index + 1} 节`, placeholder: '这本书让你想到什么…',
-            onCancel: () => setCard(null),
-            onSave: (note) => { if (note.trim()) saveNote(null, note); setCard(null) },
-          })) : null,
+        card?.kind === 'book' ? h(NoteSheet, {
+          title: '关于整本书', context: `《${toc?.title ?? ''}》 · 读到第 ${index + 1} 节`, placeholder: '这本书让你想到什么…',
+          onClose: () => setCard(null),
+          onSave: (note) => { saveNote(null, note); setCard(null) },
+        }) : null,
         failure ? h('div', { className: 'dr-toast', role: 'alert', onClick: () => setFailure(null) }, failure) : null,
         drawer ? h(TocDrawer, { rpc, bookId, index, agentIndex, highlights, notes, saveNote, removeNote, onPick: onMove, onLocate, onClose: () => setDrawer(false) }) : null,
         panel ? h(TypographyPanel, { onClose: () => setPanel(false) }) : null)
