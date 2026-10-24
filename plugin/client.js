@@ -60,6 +60,7 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-bar .dr-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dr-bar .dr-grow{flex:1}
 .dr-btn{white-space:nowrap;flex:none;border:none;background:var(--dsw-alias-bg-module-platform);color:inherit;border-radius:8px;padding:5px 10px;font:inherit;cursor:pointer}
+.dr-btn-icon{display:inline-flex;align-items:center;gap:4px}
 .dr-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dr-btn:disabled{opacity:.4;cursor:default}
 .dr-btn-line{background:transparent;border:.5px solid var(--dsw-alias-border-l2)}
@@ -93,7 +94,7 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-toc-read{color:var(--dsw-alias-label-tertiary)}
 .dr-toc-now{background:var(--dsw-alias-bg-module-platform);font-weight:650}
 .dr-toc-now .dr-toc-n,.dr-toc-now .dr-toc-tag{color:var(--dsw-alias-label-primary)}
-.dr-dock{display:flex;justify-content:center;gap:8px;width:100%;max-width:var(--dsh-composer-card-max-width,780px);box-sizing:border-box;margin:0 auto;padding:8px 12px 0}
+.dr-dock{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;width:100%;max-width:var(--dsh-composer-card-max-width,780px);box-sizing:border-box;margin:0 auto;padding:8px 12px 0}
 .dr-dock-btn{white-space:nowrap;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary) 40%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 10%,transparent);color:var(--dsw-alias-brand-primary);cursor:pointer;padding:3px 9px;border-radius:7px;font:inherit;font-size:12px;font-weight:650}
 .dr-dock-btn:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-brand-primary) 20%,transparent)}
 .dr-dock-btn:disabled{opacity:.5;cursor:default}
@@ -471,6 +472,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       chat: 'M4 4.5h12v8.5H9.5L6 16v-3H4z',
       up: 'M5 12.5 10 7.5l5 5',
       down: 'M5 7.5 10 12.5l5-5',
+      panel: 'M3.5 4.5h13v11h-13zM12.5 4.5v11',
     }
     function Icon({ name, size = 16 }) {
       return h('svg', { width: size, height: size, viewBox: '0 0 20 20', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
@@ -1310,7 +1312,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('button', { type: 'button', className: 'dr-nav', title: '下一章', 'aria-label': '下一章', disabled: index >= count - 1, onClick: () => onMove(index + 1) }, h(Icon, { name: 'right' })),
           h('button', { type: 'button', className: 'dr-nav', title: '写随想', 'aria-label': '写随想', onClick: () => setCard({ kind: 'book' }) }, h(Icon, { name: 'note' })),
           h('button', { type: 'button', className: 'dr-btn', title: '阅读设置', 'aria-label': '阅读设置', 'aria-expanded': panel, onClick: () => setPanel((open) => !open), style: { fontFamily: FONTS.song.stack, fontWeight: 600 } }, 'Aa'),
-          h('button', { type: 'button', className: 'dr-btn', onClick: onShowChat }, '对话'),
+          h('button', { type: 'button', className: 'dr-btn dr-btn-icon', title: '展开右侧栏：和 Agent 对话', onClick: onShowChat }, h(Icon, { name: 'panel', size: 15 }), '对话'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '合上')),
         h('div', { className: 'dr-page', key: index, ref: page, onScroll },
           h('article', { className: 'dr-text', ref: article, onClick: onArticleClick },
@@ -1431,7 +1433,10 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       if (!binding?.bookId) return null
       const agentIndex = binding.agentPositions?.[binding.bookId]
       const here = agentIndex === (binding.chapter ?? 0)
+      // On a phone this dock sits in the fullscreen right column, over the reader: offer the way back.
+      const phone = NARROW.matches
       return h('div', { className: 'dr-dock' },
+        phone ? h('button', { type: 'button', className: 'dr-dock-btn', title: '收起右侧栏，回到阅读区', onClick: app.showReader }, '回到阅读') : null,
         h('button', {
           type: 'button', className: 'dr-dock-btn', title: `发送「${NEXT_SUMMARY_PROMPT}」`,
           onClick: () => app.sendPrompt(sessionId, NEXT_SUMMARY_PROMPT),
@@ -1439,7 +1444,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         agentIndex === undefined ? null : h('button', {
           type: 'button', className: 'dr-dock-btn', disabled: here,
           title: here ? '你和 Agent 在读同一节' : '阅读区跳到 Agent 最近读的那一节',
-          onClick: () => app.store.bind(sessionId, { chapter: agentIndex }),
+          onClick: () => { app.store.bind(sessionId, { chapter: agentIndex }); if (phone) app.showReader() },
         }, here ? `Agent 也在读第 ${agentIndex + 1} 节` : `跳到 Agent 在读的第 ${agentIndex + 1} 节`))
     }
 
@@ -1494,6 +1499,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             ctx.sidebarRight.openTab(CHAT_KIND)
             if (!ctx.sidebarRight.isExpanded()) ctx.sidebarRight.toggleExpanded()
           },
+          /** Collapse the right column; on a phone it covers the reader, so this is the way back to reading. */
+          showReader: () => { if (ctx.sidebarRight.isExpanded()) ctx.sidebarRight.toggleExpanded() },
           openLibrary: (sessionId) => openPage(LIBRARY_KIND, sessionId),
           openPersona: (sessionId) => openPage(PERSONA_KIND, sessionId),
           openSession: (sessionId) => uiWorkspace()?.openSession(sessionId),
