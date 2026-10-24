@@ -279,6 +279,10 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 /* Below 768px DSH draws the right column fullscreen over the reader; the skin's glass pane lets the page show through.
    Paint the pane, which slides off-screen when collapsed, never the panel: that one spans the screen even while collapsed. */
 @media (max-width:767px){body.dsh-reader-shell-active [data-slot="rightbar"] [class*="_tabHost_"]{background:var(--dr-solid)}}
+/* dsh-pocket lifts the phone drawer to z-index 1200, above DSH's popup menus (1100), dialog overlays (1000) and
+   ours (1000): what the drawer opens (已登录 DeepSeek's menu, 设置, 选择一本书) landed underneath it.
+   Popups are transient; float them all over the drawer. */
+@media (max-width:1023px){body.dsh-reader-shell-active :is([role="menu"],:has(>[aria-modal="true"]),.dr-overlay){z-index:1300!important}}
 .dr-dialog-head h3{margin:0;font-size:16px;flex:1}
 .dr-dialog-list{overflow:auto;display:flex;flex-direction:column;gap:8px}
 .dr-error{color:#e5484d;font-size:12px;margin:0}
