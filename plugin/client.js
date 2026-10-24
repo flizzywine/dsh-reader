@@ -276,6 +276,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 .dr-sheet-foot .dr-grow{flex:1}
 .dr-sheet .dr-pop-cancel,.dr-sheet .dr-pop-save{height:34px;padding:0 18px;font-size:14px}
 @media (max-width:767px){.dr-sheet{padding:20px 18px 16px;max-height:92vh}.dr-sheet-text{font-size:16px}}
+/* Below 768px DSH draws the right column fullscreen over the reader; the skin's glass panel lets the page show through. */
+@media (max-width:767px){body.dsh-reader-shell-active [data-slot="rightbar"] [class$="_panel"]{background:var(--dr-solid)}}
 .dr-dialog-head h3{margin:0;font-size:16px;flex:1}
 .dr-dialog-list{overflow:auto;display:flex;flex-direction:column;gap:8px}
 .dr-error{color:#e5484d;font-size:12px;margin:0}
@@ -1478,7 +1480,15 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           /** Any highlight or note changed from this page: the reader, its 笔记 tab and 书详情 all reload. */
           marksChanged: createSignal(),
           personasChanged: createSignal(),
-          openChat: () => ctx.sidebarRight.openTab(CHAT_KIND),
+          /**
+           * Show the 对话 tab, expanding the column when it is collapsed: openTab only places the tab, and
+           * DSH's own way back in is a button in the conversation header, which the reader replaces.
+           * On a phone the column starts collapsed, so without this 对话 did nothing there.
+           */
+          openChat: () => {
+            ctx.sidebarRight.openTab(CHAT_KIND)
+            if (!ctx.sidebarRight.isExpanded()) ctx.sidebarRight.toggleExpanded()
+          },
           openLibrary: (sessionId) => openPage(LIBRARY_KIND, sessionId),
           openPersona: (sessionId) => openPage(PERSONA_KIND, sessionId),
           openSession: (sessionId) => uiWorkspace()?.openSession(sessionId),
