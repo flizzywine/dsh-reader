@@ -157,7 +157,7 @@ export function readingTools({ library, bindingFor, updateBinding }) {
     },
     {
       name: 'find_highlights',
-      description: `检索这本书的划线和用户的笔记。笔记有两种：写在划线上的想法，和不挂在原文上、关于整本书的笔记（记着用户写的时候读到第几节）。query 匹配原文或笔记里的文字；from/to 只限定划线所在的节（给了范围就不列整本书的笔记）；都不填就列出全部。划线最多返回 ${HIGHLIGHT_LIMIT} 条，按书中顺序。用户问「我标过/划过哪些」「我记过什么」「之前写的感想」时用。笔记是用户自己写的，你只读不写。`,
+      description: `检索这本书的划线和用户的笔记。笔记有两种：写在划线上的想法，和随想（不挂在原文上的笔记，记着用户写的时候读到第几节）。query 匹配原文或笔记里的文字；from/to 只限定划线所在的节（给了范围就不列随想）；都不填就列出全部。划线最多返回 ${HIGHLIGHT_LIMIT} 条，按书中顺序。用户问「我标过/划过哪些」「我记过什么」「之前写的感想」时用。笔记是用户自己写的，你只读不写。`,
       parameters: {
         type: 'object',
         properties: {
@@ -180,7 +180,7 @@ export function readingTools({ library, bindingFor, updateBinding }) {
         if (hits.length === 0 && notes.length === 0) return all.length === 0 ? '这本书还没有划线和笔记。' : `没有符合条件的划线或笔记（全书共 ${all.length} 条划线）。`
         const parts = []
         if (notes.length) {
-          parts.push(`整本书的笔记 ${notes.length} 条（新的在前）：\n\n${notes.map((n) => `[${n.id}]${n.chapter === null ? '' : `（写于读到第 ${n.chapter + 1} 节时）`} ${n.note}`).join('\n')}`)
+          parts.push(`随想 ${notes.length} 条（不挂在原文上的笔记，新的在前）：\n\n${notes.map((n) => `[${n.id}]${n.chapter === null ? '' : `（写于读到第 ${n.chapter + 1} 节时）`} ${n.note}`).join('\n')}`)
         }
         if (hits.length) {
           const toc = await readToc(library, bookId)

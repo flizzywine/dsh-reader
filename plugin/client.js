@@ -131,7 +131,7 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-pop-save:hover:not(:disabled){filter:brightness(1.06)}
 .dr-pop-save:disabled{opacity:.4;cursor:default}
 .dr-pop-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-/* Notes about the whole book: a dashed 写笔记 button, then plain cards with when/where they were written. */
+/* 随想 (notes on no quote): a dashed 写随想 button, then plain cards with when/where they were written. */
 .dr-booknotes{display:flex;flex-direction:column;gap:8px}
 .dr-notes .dr-booknotes{padding:2px 6px 10px}
 .dr-booknote-add{display:flex;align-items:center;justify-content:center;gap:6px;height:34px;border:1px dashed var(--dsw-alias-border-l2);border-radius:9px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;cursor:pointer}
@@ -724,7 +724,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           : null,
         tab === 'notes' ? (notes === null ? empty('读取中…')
           : h('div', { className: 'dr-bd-list' },
-            h('div', { className: 'dr-bd-chapter' }, '整本书'),
+            h('div', { className: 'dr-bd-chapter' }, '随想'),
             h(BookNotes, { notes: bookNotes, chapter: reading ? binding.chapter ?? 0 : null, save: saveNote, remove: removeNote }),
             notes.length === 0 ? empty('原文上还没有笔记。在阅读区选中文字点「写想法」，或者点开一条高亮写下想法。')
               : grouped(notes, (m) => h('div', { key: m.id, className: 'dr-bd-note' },
@@ -1070,20 +1070,20 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     const noteMeta = (n) => [n.chapter === null || n.chapter === undefined ? null : `读到第 ${n.chapter + 1} 节`, formatTime(Date.parse(n.createdAt))].filter(Boolean).join(' · ')
 
     /**
-     * Notes about the whole book (not on any quote): 写笔记, and each note with 修改 / 删除.
+     * 随想, notes on no quote: 写随想, and each one with 修改 / 删除.
      * `chapter` is where the user is reading now, saved with a new note; null when not reading this book.
      */
     function BookNotes({ notes, chapter, save, remove }) {
       const [editing, setEditing] = useState(null) // 'new' or a note id
       const editingNote = notes.find((n) => n.id === editing)
       return h('div', { className: 'dr-booknotes' },
-        h('button', { type: 'button', className: 'dr-booknote-add', onClick: () => setEditing('new') }, h(Icon, { name: 'plus', size: 14 }), '写笔记'),
+        h('button', { type: 'button', className: 'dr-booknote-add', onClick: () => setEditing('new') }, h(Icon, { name: 'plus', size: 14 }), '写随想'),
         editing === 'new' ? h(NoteSheet, {
-          title: '关于整本书', context: chapter === null ? null : `读到第 ${chapter + 1} 节`, placeholder: '这本书让你想到什么…',
+          title: '随想', context: chapter === null ? null : `读到第 ${chapter + 1} 节`, placeholder: '这本书让你想到什么…',
           onClose: () => setEditing(null), onSave: (text) => { save(null, text); setEditing(null) },
         }) : null,
         editingNote ? h(NoteSheet, {
-          key: editingNote.id, title: '修改笔记', context: noteMeta(editingNote), initial: editingNote.note,
+          key: editingNote.id, title: '修改随想', context: noteMeta(editingNote), initial: editingNote.note,
           onClose: () => setEditing(null), onSave: (text) => { save(editingNote.id, text); setEditing(null) },
         }) : null,
         notes.map((n) => h('div', { key: n.id, className: 'dr-booknote' },
@@ -1091,7 +1091,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             h('div', { className: 'dr-booknote-foot' },
               h('span', null, noteMeta(n)),
               h('button', { type: 'button', onClick: () => setEditing(n.id) }, '修改'),
-              h('button', { type: 'button', onClick: () => { if (window.confirm('删除这条笔记？')) remove(n.id) } }, '删除')))))
+              h('button', { type: 'button', onClick: () => { if (window.confirm('删除这条随想？')) remove(n.id) } }, '删除')))))
     }
 
     /** 笔记: notes about the whole book first, then every highlight in reading order, grouped by chapter. */
@@ -1099,7 +1099,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const shown = query ? highlights.filter((m) => m.quote.includes(query) || m.note?.includes(query)) : highlights
       const loose = query ? notes.filter((n) => n.note.includes(query)) : notes
       return h('div', { className: 'dr-toc-list dr-notes' },
-        h('div', { className: 'dr-toc-vol' }, '整本书'),
+        h('div', { className: 'dr-toc-vol' }, '随想'),
         h(BookNotes, { notes: loose, chapter, save: saveNote, remove: removeNote }),
         highlights.length === 0 ? h('p', { className: 'dr-note dr-notes-empty' }, '还没有划线。选中正文里的文字，就能划线或写想法。')
           : shown.length === 0 ? h('p', { className: 'dr-note dr-notes-empty' }, '没有匹配的划线。')
@@ -1301,7 +1301,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('span', { className: 'dr-grow' }),
           h('button', { type: 'button', className: 'dr-nav', title: '上一章', 'aria-label': '上一章', disabled: index <= 0, onClick: () => onMove(index - 1) }, h(Icon, { name: 'left' })),
           h('button', { type: 'button', className: 'dr-nav', title: '下一章', 'aria-label': '下一章', disabled: index >= count - 1, onClick: () => onMove(index + 1) }, h(Icon, { name: 'right' })),
-          h('button', { type: 'button', className: 'dr-nav', title: '写笔记（关于整本书）', 'aria-label': '写笔记', onClick: () => setCard({ kind: 'book' }) }, h(Icon, { name: 'note' })),
+          h('button', { type: 'button', className: 'dr-nav', title: '写随想', 'aria-label': '写随想', onClick: () => setCard({ kind: 'book' }) }, h(Icon, { name: 'note' })),
           h('button', { type: 'button', className: 'dr-btn', title: '阅读设置', 'aria-label': '阅读设置', 'aria-expanded': panel, onClick: () => setPanel((open) => !open), style: { fontFamily: FONTS.song.stack, fontWeight: 600 } }, 'Aa'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onShowChat }, '对话'),
           h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '合上')),
@@ -1338,7 +1338,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
               opened.by === 'agent' ? h('span', { className: 'dr-note' }, 'Agent 划的') : null),
           })) : null,
         card?.kind === 'book' ? h(NoteSheet, {
-          title: '关于整本书', context: `《${toc?.title ?? ''}》 · 读到第 ${index + 1} 节`, placeholder: '这本书让你想到什么…',
+          title: '随想', context: `《${toc?.title ?? ''}》 · 读到第 ${index + 1} 节`, placeholder: '这本书让你想到什么…',
           onClose: () => setCard(null),
           onSave: (note) => { saveNote(null, note); setCard(null) },
         }) : null,
