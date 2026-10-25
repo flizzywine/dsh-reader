@@ -233,10 +233,6 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-side-name span{font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .dr-side-new{height:40px;flex:none;border:1px solid var(--dsw-alias-border-l2);border-radius:11px;background:var(--dsw-alias-button-elevated-fill);color:inherit;cursor:pointer;font:inherit;font-weight:650}
 .dr-side-new:hover{background:var(--dsw-alias-button-floating-hover,var(--dsw-alias-interactive-bg-hover))}
-.dr-side-tools{display:grid;grid-template-columns:1fr 1fr;gap:4px;flex:none}
-.dr-side-tool{height:32px;display:flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;cursor:pointer}
-.dr-side-tool:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dr-side-tool:disabled{opacity:.5;cursor:wait}
 .dr-side-rail{height:100%;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 0}
 .dr-side-icon{width:34px;height:34px;border:0;border-radius:9px;background:transparent;color:inherit;cursor:pointer;display:grid;place-items:center}
 .dr-side-icon:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -478,8 +474,11 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         h('option', { value: NEW }, '新建分组…'))
     }
 
-    /** 选择一本书 · 开始阅读: dialog over the whole frame, like tavern's card picker. */
-    function BookPicker({ app, onClose }) {
+    /**
+     * 选择一本书 · 开始阅读: dialog over the whole frame, like tavern's card picker. Importing and the
+     * 书库 page are reached from here, as tavern reaches its card tools from the picker.
+     */
+    function BookPicker({ app, onClose, onLibrary }) {
       const { books, error } = useLibrary(app)
       const [starting, setStarting] = useState(null)
       const [failure, setFailure] = useState(null)
@@ -493,6 +492,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('div', { className: 'dr-dialog-head' },
             h('h3', null, '选择一本书 · 开始阅读'),
             h(ImportButton, { app, className: 'dr-btn dr-btn-line' }),
+            h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '在右栏打开书库：分组、详情、总结', onClick: () => { onLibrary(); onClose() } }, '管理书库'),
             h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '关闭')),
           h('p', { className: 'dr-note' }, '每本书开一个新对话；Agent 以当前的工作台性格陪你读。'),
           failure ? h('p', { className: 'dr-error' }, failure) : null,
@@ -511,8 +511,6 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     /** Small line icons (16px, currentColor) for the sidebar. */
     const ICONS = {
       book: 'M4 4.5A1.5 1.5 0 0 1 5.5 3H12v12H5.5A1.5 1.5 0 0 0 4 16.5zM4 16.5A1.5 1.5 0 0 0 5.5 18H16V6M12 3h4v3',
-      import: 'M10 3v9M6.5 8.5 10 12l3.5-3.5M4 14v2.5h12V14',
-      shelf: 'M3.5 4v12M7 4v12M10.5 5l3.5 11M3 16.5h14',
       plus: 'M10 4v12M4 10h12',
       list: 'M7 5.5h10M7 10h10M7 14.5h10M3.5 5.5h.01M3.5 10h.01M3.5 14.5h.01',
       left: 'M12.5 4.5 7 10l5.5 5.5',
@@ -579,9 +577,6 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('span', { className: 'dr-side-mark' }, h(Icon, { name: 'book', size: 17 })),
           h('span', { className: 'dr-side-name' }, h('b', null, 'DSH 阅读器'), h('span', null, '书在中间 · 陪读在右边'))),
         h('button', { type: 'button', className: 'dr-side-new', onClick: () => setPicking(true) }, '＋ 选择一本书 · 开始阅读'),
-        h('div', { className: 'dr-side-tools' },
-          h(ImportButton, { app, className: 'dr-side-tool', label: [h(Icon, { key: 'i', name: 'import' }), '导入新书'] }),
-          h('button', { type: 'button', className: 'dr-side-tool', onClick: () => app.openLibrary(current) }, h(Icon, { name: 'shelf' }), '书库')),
         h('div', { className: 'dr-side-label' }, h('span', null, '阅读历史'), total ? h('span', null, total) : null),
         ordered.length === 0 ? h('p', { className: 'dr-note', style: { padding: '0 6px' } }, '还没有读过的书。点上面的按钮选一本开始。') : ordered.map((group) => h('div', { key: group.bookId },
           h('button', { type: 'button', className: 'dr-group-title', 'aria-expanded': !closed.has(group.bookId), onClick: () => toggle(group.bookId) },
@@ -596,7 +591,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('small', null, [`第 ${(binding.chapter ?? 0) + 1} 节`, formatTime(binding.updatedAt)].filter(Boolean).join(' · '))))))),
         h('div', { className: 'dr-persona-row', onClick: () => app.openPersona(current), title: '切换工作台性格' },
           h('span', null, '工作台性格'), h('b', null, activePersona?.name ?? '空白')),
-        picking ? h(BookPicker, { app, onClose: () => setPicking(false) }) : null)
+        picking ? h(BookPicker, { app, onClose: () => setPicking(false), onLibrary: () => app.openLibrary(current) }) : null)
     }
 
     /** Persona library view, refreshed whenever it changes anywhere. */
