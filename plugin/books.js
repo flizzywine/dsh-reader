@@ -2,7 +2,8 @@
 // agent reads one chapter file at a time instead of the whole novel.
 //
 //   library/<书名>/原文.txt / 原文.epub      the imported file, untouched
-//   library/<书名>/目录.json                 { title, chapters: [{ title, file, chars }] }
+//   library/<书名>/目录.json                 { title, group?, chapters: [{ title, file, chars }] }; group is the
+//                                            书库 group the user put the book in
 //   library/<书名>/章节/0001 第一章 xxx.txt
 //   library/<书名>/总结/0001 第一章 xxx.md    written by the agent through save_summary
 //   library/<书名>/划线.json                 { next, highlights: [{ id, chapter, at, quote, prefix, suffix, note, by, createdAt }],
@@ -172,7 +173,7 @@ export async function listBooks(library) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue
     try {
       const toc = await readToc(library, entry.name)
-      books.push({ id: entry.name, title: toc.title, chars: toc.chars, chapters: toc.chapters.length })
+      books.push({ id: entry.name, title: toc.title, group: toc.group ?? null, chars: toc.chars, chapters: toc.chapters.length })
     } catch { /* not a book folder */ }
   }
   return books.sort((a, b) => a.title.localeCompare(b.title, 'zh'))
@@ -180,6 +181,19 @@ export async function listBooks(library) {
 
 export async function readToc(library, id) {
   return JSON.parse(await readFile(join(library, safeName(id), TOC_FILE), 'utf8'))
+}
+
+/** Put a book in a 书库 group; an empty name takes it out of any. */
+export async function setGroup(library, id, group) {
+  const name = String(group ?? '').replace(/\s+/g, ' ').trim()
+  if (name.length > 20) throw new Error('分组名最多 20 个字')
+  const toc = await readToc(library, id)
+  if (name) toc.group = name
+  else delete toc.group
+  const path = join(library, safeName(id), TOC_FILE)
+  await writeFile(`${path}.tmp`, JSON.stringify(toc, null, 2))
+  await rename(`${path}.tmp`, path)
+  return { group: toc.group ?? null }
 }
 
 function chapterAt(toc, index) {

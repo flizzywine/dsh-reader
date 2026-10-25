@@ -286,6 +286,10 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 @media (max-width:1023px){body.dsh-reader-shell-active :is([role="menu"],:has(>[aria-modal="true"]),.dr-overlay){z-index:1300!important}}
 .dr-dialog-head h3{margin:0;font-size:16px;flex:1}
 .dr-dialog-list{overflow:auto;display:flex;flex-direction:column;gap:8px}
+.dr-group{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;font-weight:600;padding:6px 2px 0;cursor:pointer;text-align:left}
+.dr-group em{font-style:normal;font-weight:400;color:var(--dsw-alias-label-tertiary)}
+.dr-group svg{margin-left:auto;color:var(--dsw-alias-label-tertiary)}
+.dr-bd-group{align-self:flex-start;max-width:100%;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:12.5px;padding:3px 6px}
 .dr-error{color:#e5484d;font-size:12px;margin:0}
 .dr-persona{height:100%;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary)}
 .dr-persona textarea{flex:1;min-height:240px;resize:vertical;font:inherit;font-size:13px;line-height:1.6;color:inherit;background:var(--dsw-alias-bg-module-platform);border:none;border-radius:10px;padding:12px}
@@ -420,6 +424,60 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         error ? h('p', { className: 'dr-error' }, error) : null)
     }
 
+    const UNGROUPED = '未分组'
+    const COLLAPSED_KEY = 'dsh-reader:collapsed-groups'
+
+    /** Group names in use, sorted. */
+    const groupNames = (books) => [...new Set(books.map((b) => b.group).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh'))
+
+    /**
+     * Books under their 书库 group, each group folding away (remembered in this browser); books with
+     * no group come last under 未分组. A library nobody has grouped stays a plain list.
+     */
+    function GroupedBooks({ books, card }) {
+      const [collapsed, setCollapsed] = useState(() => {
+        try { return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]')) } catch { return new Set() }
+      })
+      const names = groupNames(books)
+      if (names.length === 0) return books.map(card)
+      const toggle = (name) => setCollapsed((set) => {
+        const next = new Set(set)
+        next.has(name) ? next.delete(name) : next.add(name)
+        try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next])) } catch {}
+        return next
+      })
+      return [...names, UNGROUPED].flatMap((name) => {
+        const list = books.filter((b) => (b.group ?? UNGROUPED) === name)
+        if (list.length === 0) return []
+        const open = !collapsed.has(name)
+        return [
+          h('button', { key: `g:${name}`, type: 'button', className: 'dr-group', 'aria-expanded': open, onClick: () => toggle(name) },
+            name, h('em', null, list.length), h(Icon, { name: open ? 'up' : 'down', size: 14 })),
+          ...(open ? list.map(card) : []),
+        ]
+      })
+    }
+
+    /** 分组 picker on a book's page: an existing group, none, or a new one. */
+    function GroupSelect({ app, book, groups }) {
+      const NEW = '\u0000new'
+      async function change(event) {
+        let group = event.target.value
+        if (group === NEW) {
+          group = window.prompt('新分组的名字（比如：八字、周易、佛学）')?.trim()
+          if (!group) { event.target.value = book.group ?? ''; return }
+        }
+        try {
+          await app.rpc('book-group', { bookId: book.id, group })
+          app.libraryChanged.bump()
+        } catch (e) { window.alert(String(e?.message ?? e)) }
+      }
+      return h('select', { className: 'dr-bd-group', value: book.group ?? '', onChange: change, title: '书库分组' },
+        h('option', { value: '' }, groups.length ? '分组：未分组' : '未分组'),
+        groups.map((g) => h('option', { key: g, value: g }, `分组：${g}`)),
+        h('option', { value: NEW }, '新建分组…'))
+    }
+
     /** 选择一本书 · 开始阅读: dialog over the whole frame, like tavern's card picker. */
     function BookPicker({ app, onClose }) {
       const { books, error } = useLibrary(app)
@@ -441,13 +499,13 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('div', { className: 'dr-dialog-list' },
             error ? h('p', { className: 'dr-error' }, error)
               : books === null ? h('p', { className: 'dr-note' }, '读取中…')
-                : books.length === 0 ? h('p', { className: 'dr-note' }, '书库是空的，先导入一本 TXT 或 EPUB。')
-                  : books.map((b) => h('div', { key: b.id, className: 'dr-card' },
+                : books.length === 0 ? h('p', { className: 'dr-note' }, '书库是空的，先导入一本 TXT、EPUB 或 PDF。')
+                  : h(GroupedBooks, { books, card: (b) => h('div', { key: b.id, className: 'dr-card' },
                     h('div', { className: 'dr-card-text' },
                       h('div', { className: 'dr-card-title' }, b.title),
                       h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`)),
                     h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: starting !== null, onClick: () => start(b.id) },
-                      starting === b.id ? '正在打开…' : '开始阅读')))))), document.body)
+                      starting === b.id ? '正在打开…' : '开始阅读')) })))), document.body)
     }
 
     /** Small line icons (16px, currentColor) for the sidebar. */
@@ -666,7 +724,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      * A book's page in 书库: its numbers and three tabs — 高亮 (every highlight), 笔记 (highlights the
      * user wrote a note on) and 总结 (the agent's summaries).
      */
-    function BookDetail({ app, book, sessionId, binding, onBack, here, fresh }) {
+    function BookDetail({ app, book, groups, sessionId, binding, onBack, here, fresh }) {
       const [summaries, setSummaries] = useState(null)
       const [marks, setMarks] = useState(null)
       const [toc, setToc] = useState(null)
@@ -713,6 +771,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         h('header', { className: 'dr-bd-head' },
           h('h3', null, book.title),
           h('p', null, `${formatChars(book.chars)} · ${book.chapters} 节`),
+          h(GroupSelect, { app, book, groups }),
           reading ? h('div', { className: 'dr-bd-progress' },
             h('div', null, h('span', null, `读到第 ${(binding.chapter ?? 0) + 1} 节`), h('span', null, `${progress}%`)),
             h('i', null, h('b', { style: { width: `${progress}%` } }))) : null,
@@ -766,18 +825,18 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const here = (bookId) => run(app.store.bind(sessionId, { bookId }))
       const fresh = (bookId) => run(app.startReading(bookId))
       const shown = detail && books?.find((b) => b.id === detail)
-      if (shown) return h(BookDetail, { app, book: shown, sessionId, binding, onBack: () => setDetail(null), here, fresh })
+      if (shown) return h(BookDetail, { app, book: shown, groups: groupNames(books), sessionId, binding, onBack: () => setDetail(null), here, fresh })
       return h('div', { className: 'dr-lib' },
         h('div', { className: 'dr-lib-head' },
           h('div', null,
             h('h3', null, '书库'),
-            h('p', null, '导入 TXT 或 EPUB，或直接放进 dsh-reader/library/ 目录。点书名看详情和总结。')),
+            h('p', null, '导入 TXT、EPUB 或 PDF，或直接放进 dsh-reader/library/ 目录。点书名看详情、总结，在那里分组。')),
           h(ImportButton, { app, className: 'dr-btn dr-btn-line', label: '导入' })),
         failure ? h('p', { className: 'dr-error' }, failure) : null,
         error ? h('p', { className: 'dr-error' }, error)
           : books === null ? h('p', { className: 'dr-note' }, '读取中…')
             : books.length === 0 ? h('p', { className: 'dr-note' }, '书库是空的。')
-              : books.map((b) => h('div', { key: b.id, className: 'dr-card' + (b.id === current ? ' dr-card-on' : '') },
+              : h(GroupedBooks, { books, card: (b) => h('div', { key: b.id, className: 'dr-card' + (b.id === current ? ' dr-card-on' : '') },
                 h('button', { type: 'button', className: 'dr-card-text dr-card-link', title: '看详情和总结', onClick: () => setDetail(b.id) },
                   h('div', { className: 'dr-card-title' }, (b.id === current ? '✓ ' : '') + b.title),
                   h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`
@@ -786,7 +845,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                   ? h('span', { className: 'dr-note' }, '在读')
                   : h('div', { className: 'dr-row' },
                     h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '在这个对话里换成这本书', onClick: () => here(b.id) }, current ? '换到这本' : '打开'),
-                    current ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '为这本书新开一个对话', onClick: () => fresh(b.id) }, '新开') : null))))
+                    current ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '为这本书新开一个对话', onClick: () => fresh(b.id) }, '新开') : null)) }))
     }
 
     const HEADING_LINE = /^(第[0-9零一二三四五六七八九十百千万两〇]+[章回节卷集部篇]|序章|序言|楔子|引子|尾声|后记|番外)/
