@@ -327,7 +327,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 .dr-ask-ok{background:var(--dsw-alias-brand-primary);color:#fff}
 .dr-ask-ok:disabled{opacity:.45;cursor:default}
 .dr-ask-danger{background:#c0392b}
-.dr-stock{display:flex;flex-direction:column;gap:8px;margin:6px 0;padding:12px 14px;border:.5px solid var(--dsw-alias-border-l2);border-radius:12px;background:color-mix(in srgb,currentColor 3%,transparent);color:var(--dsw-alias-label-primary);font-size:13px}
+.dr-stock{display:flex;flex-direction:column;gap:8px;margin:6px 0;line-height:1.35;padding:12px 14px;border:.5px solid var(--dsw-alias-border-l2);border-radius:12px;background:color-mix(in srgb,currentColor 3%,transparent);color:var(--dsw-alias-label-primary);font-size:13px}
 .dr-stock-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
 .dr-stock-head>div:first-child{display:flex;flex-direction:column;gap:2px;min-width:0}
 .dr-stock-head>div:first-child b{font-size:15px}
@@ -854,7 +854,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('small', null, [`第 ${(binding.chapter ?? 0) + 1} 节`, formatTime(binding.updatedAt)].filter(Boolean).join(' · '))))))),
         h('div', { className: 'dr-persona-row', onClick: () => app.openPersona(current), title: fromGroup ? `这本书在「${openBook.group}」分组，用分组绑定的性格；在书库「管理分组」里改` : '切换默认工作台性格' },
           h('span', null, '工作台性格'), h('b', null, activePersona?.name ?? '空白'), fromGroup ? h('small', null, openBook.group) : null),
-        picking ? h(BookPicker, { app, onClose: () => setPicking(false), onLibrary: () => app.openLibrary(current) }) : null)
+        picking ? h(BookPicker, { app, onClose: () => setPicking(false), onLibrary: () => app.openLibrary(current) }) : null,
+        h(InlineStockCards, { app }))
     }
 
     /**
@@ -1978,6 +1979,80 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             h('td', { style: { color: r.netIncome < 0 ? DOWN : undefined } }, fmtMoney(r.netIncome, cur)),
             h('td', null, r.epsDiluted ?? '—'), h('td', { style: { color: r.freeCashFlow < 0 ? DOWN : undefined } }, fmtMoney(r.freeCashFlow, cur))))))),
         h('p', { className: 'dr-stock-foot' }, `数据：${data.source === 'SEC EDGAR' ? 'SEC EDGAR（公司原始申报）' : 'Financial Modeling Prep'} · 报价 FMP · ${new Date(data.at).toLocaleString('zh-CN')}${data.stale ? ' · 数据源暂时取不到，用的是缓存' : ''} · — 表示没有这项数据`))
+    }
+
+    /** The one-line body of a `stock` code block in a reply: `chart ISRG 6m` or `fundamentals ISRG`. */
+    const STOCK_FENCE = /^(chart|fundamentals)\s+([A-Za-z][A-Za-z0-9.-]{0,9})(?:\s+(1m|3m|6m|1y|2y|5y))?$/
+
+    /**
+     * Stock cards inside Agent replies. DSH has no hook for code blocks, so this watches the page:
+     * a finished code block (not inside a streaming reply) whose whole text is a stock marker is
+     * hidden and the card drawn right after it, through a portal. When the host re-renders or
+     * drops the block, the card follows. Mutations inside the cards themselves are ignored.
+     */
+    function InlineStockCards({ app }) {
+      const [mounts, setMounts] = useState([])
+      useEffect(() => {
+        const byBlock = new Map()
+        let next = 0
+        let scheduled = false
+        function scan() {
+          scheduled = false
+          let changed = false
+          for (const block of document.querySelectorAll('.md-code-block')) {
+            if (block.closest('[data-streaming]')) continue
+            const m = (block.querySelector('pre')?.textContent ?? '').trim().match(STOCK_FENCE)
+            const old = byBlock.get(block)
+            const key = m ? m.slice(1).join(' ') : null
+            if (old && old.key === key && old.container.isConnected) {
+              block.style.display = 'none'
+              continue
+            }
+            if (old) { old.container.remove(); byBlock.delete(block); block.style.display = ''; changed = true }
+            if (!m) continue
+            const container = document.createElement('div')
+            container.className = 'dr-stock-inline'
+            block.after(container)
+            block.style.display = 'none'
+            byBlock.set(block, { id: ++next, key, container, kind: m[1], symbol: m[2].toUpperCase(), range: m[3] ?? '6m' })
+            changed = true
+          }
+          for (const [block, mount] of byBlock) {
+            if (block.isConnected) continue
+            mount.container.remove()
+            byBlock.delete(block)
+            changed = true
+          }
+          if (changed) setMounts([...byBlock.values()])
+        }
+        const inCard = (node) => (node.nodeType === 1 ? node : node.parentElement)?.closest('.dr-stock-inline')
+        const observer = new MutationObserver((records) => {
+          if (scheduled || records.every((r) => inCard(r.target))) return
+          scheduled = true
+          requestAnimationFrame(scan)
+        })
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['data-streaming'] })
+        scan()
+        return () => {
+          observer.disconnect()
+          for (const [block, mount] of byBlock) { mount.container.remove(); block.style.display = '' }
+        }
+      }, [])
+      return mounts.map((m) => createPortal(h(InlineStockCard, { app, kind: m.kind, symbol: m.symbol, range: m.range }), m.container, String(m.id)))
+    }
+
+    /** One card in a reply, read from the host's stock cache (the tool call that preceded it filled it). */
+    function InlineStockCard({ app, kind, symbol, range }) {
+      const [state, setState] = useState({ data: null, error: null })
+      useEffect(() => {
+        let live = true
+        app.rpc('stock-card', { kind, symbol, range }).then((data) => live && setState({ data, error: null }), (e) => live && setState({ data: null, error: String(e?.message ?? e) }))
+        return () => { live = false }
+      }, [kind, symbol, range])
+      const what = kind === 'chart' ? '行情' : '财务数据'
+      if (state.error) return h('div', { className: 'dr-stock-line dr-error' }, `${symbol} 的${what}没取到：${state.error}`)
+      if (!state.data) return h('div', { className: 'dr-stock-line' }, `正在取 ${symbol} 的${what}…`)
+      return kind === 'chart' ? h(StockChartCard, { data: state.data }) : h(StockFundamentalsCard, { data: state.data })
     }
 
     /** The tool row for both stock tools: a loading line while running, the card once the result has data. */

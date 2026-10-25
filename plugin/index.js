@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process'
 import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, setGroup, readGroups, createGroup, renameGroup, deleteGroup, BOOK_TYPES } from './books.js'
 import { managePersona, moveGroupPersona, personaFor, personaView } from './personas.js'
 import { readingTools } from './tools.js'
-import { stockTools } from './stocks.js'
+import { RANGES, cleanSymbol, stockData, stockTools } from './stocks.js'
 
 /** HTTP prefix the browser half posts to: `${ROUTE}/<endpoint>` with a JSON payload. */
 const ROUTE = '/api/dsh-reader'
@@ -19,6 +19,8 @@ const DATA = join(ROOT, 'data')
 const BINDINGS = join(DATA, 'sessions.json')
 const SETTINGS = join(DATA, 'settings.json')
 const IMPORT_LIMIT_BYTES = 64 * 1024 * 1024
+/** US stock data, shared by the stock tools and the cards the page draws in replies. */
+const STOCKS = stockData({ dataDir: DATA })
 /** DSH's identity sections; dropped while a 工作台性格 speaks instead. */
 const REPLACED_BY_PERSONA = new Set(['harness:identity', 'deployment:persona-prefix'])
 
@@ -82,6 +84,13 @@ async function handleCall(endpoint, payload = {}) {
       return listBooks(LIBRARY)
     case 'groups':
       return readGroups(LIBRARY)
+    // A stock card inside an Agent reply: the tool call has just filled the cache, so this is quick.
+    case 'stock-card': {
+      const symbol = cleanSymbol(payload.symbol)
+      if (payload.kind === 'chart') return STOCKS.chart(symbol, RANGES[payload.range] ? payload.range : '6m')
+      if (payload.kind === 'fundamentals') return STOCKS.fundamentals(symbol)
+      throw new Error(`unknown stock card: ${payload.kind}`)
+    }
     case 'group-create':
       return createGroup(LIBRARY, payload.name)
     // A group's bound persona (in settings) follows it when renamed and goes when it is deleted.
@@ -364,7 +373,7 @@ export function apply(ctx) {
   // Tools are global (the tool list is part of the cached prefix); each one checks the session's book.
   ctx.inject(['tools'], (scope) => {
     // Stock tools work in every session, with or without a book.
-    for (const tool of [...readingTools({ library: LIBRARY, bindingFor: async (sessionId) => (await readBindings())[sessionId] ?? null, updateBinding }), ...stockTools({ dataDir: DATA })]) {
+    for (const tool of [...readingTools({ library: LIBRARY, bindingFor: async (sessionId) => (await readBindings())[sessionId] ?? null, updateBinding }), ...stockTools({ data: STOCKS })]) {
       scope.effect(() => scope.tools.register(tool), `dsh-reader: ${tool.name} tool`)
     }
   })

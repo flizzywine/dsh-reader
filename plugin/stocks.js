@@ -424,14 +424,16 @@ function fundamentalsSummary(f) {
   return [...head, ...table, '— 表示数据源没有这一项，不要自己估。'].join('\n') + staleNote(f)
 }
 
+/** How the Agent puts a card into its reply: a one-line `stock` code block the page swaps for the card. */
+const fence = (body) => `要让这张图出现在你的回复正文里，在讲到它的地方单独写一个代码块（语言写 stock），内容只有一行：${body}`
+
 /** The two US stock tools; their results carry the data the page draws (presentationMeta). */
-export function stockTools({ dataDir }) {
-  const data = stockData({ dataDir })
+export function stockTools({ data }) {
   const symbolParam = { type: 'string', description: '美股代码，如 AAPL、ISRG、BRK-B（ADR 也行，如 NVO、NOK）' }
   return [
     {
       name: 'stock_chart',
-      description: '取一只美股的真实行情，在对话里给用户画 K 线图（带成交量和 5/20/60 日均线，可缩放）。你会收到行情摘要；图由界面画，不要自己编价格或画图。用户想看走势、K 线、涨跌时用。',
+      description: '取一只美股的真实行情，给用户画 K 线图（带成交量和 5/20/60 日均线，可缩放）。你会收到行情摘要；图由界面画，不要自己编价格或画图。用户想看走势、K 线、涨跌时用。拿到结果后，在回复里讲到这张图的地方放一个 stock 代码块，内容是一行 `chart 代码 范围`（如 chart ISRG 6m），界面会把它换成图。',
       parameters: {
         type: 'object',
         properties: { symbol: symbolParam, range: { type: 'string', enum: Object.keys(RANGES), description: '时间范围，默认 6m；5y 用周 K' } },
@@ -447,12 +449,12 @@ export function stockTools({ dataDir }) {
         const symbol = cleanSymbol(args?.symbol)
         const range = RANGES[args?.range] ? args.range : '6m'
         const chart = await data.chart(symbol, range)
-        return { summary: chartSummary(chart), chart }
+        return { summary: `${chartSummary(chart)}\n${fence(`chart ${symbol} ${range}`)}`, chart }
       },
     },
     {
       name: 'stock_fundamentals',
-      description: '取一只美股的估值和基本财务：市值、PE/PS/PB、自由现金流收益率、毛利率、净利率、营收同比，以及最近几个季度（外国公司是最近几年）的营收、利润、现金流，在对话里给用户画成卡片。数据来自 FMP 或 SEC 原始申报，你会收到同样的数字；缺的项是 —，不要自己补。',
+      description: '取一只美股的估值和基本财务：市值、PE/PS/PB、自由现金流收益率、毛利率、净利率、营收同比，以及最近几个季度（外国公司是最近几年）的营收、利润、现金流，给用户画成卡片。数据来自 FMP 或 SEC 原始申报，你会收到同样的数字；缺的项是 —，不要自己补。拿到结果后，在回复里讲到它的地方放一个 stock 代码块，内容是一行 `fundamentals 代码`（如 fundamentals ISRG），界面会把它换成卡片。',
       parameters: { type: 'object', properties: { symbol: symbolParam }, required: ['symbol'], additionalProperties: false },
       output: {
         schema: { type: 'object' },
@@ -460,8 +462,9 @@ export function stockTools({ dataDir }) {
         presentationMeta: (_args, value) => value.card,
       },
       async execute(args) {
-        const card = await data.fundamentals(cleanSymbol(args?.symbol))
-        return { summary: fundamentalsSummary(card), card }
+        const symbol = cleanSymbol(args?.symbol)
+        const card = await data.fundamentals(symbol)
+        return { summary: `${fundamentalsSummary(card)}\n${fence(`fundamentals ${symbol}`)}`, card }
       },
     },
   ]
