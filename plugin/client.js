@@ -116,22 +116,27 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-tools button{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:52px;padding:6px 8px;border:0;border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
 .dr-tools button:hover{background:rgba(255,255,255,.12)}
 .dr-pop-scrim{position:fixed;inset:0;z-index:19}
-.dr-pop{position:fixed;z-index:20;width:min(360px,calc(100vw - 32px));box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:14px;background:var(--dr-solid);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2);box-shadow:0 12px 36px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.06);font-size:13px}
-.dr-pop-quote{margin:0;max-height:7.5em;overflow:auto;padding:4px 10px;border-left:3px solid var(--dr-hl-line);white-space:pre-line;line-height:1.6;color:var(--dsw-alias-label-secondary)}
+.dr-pop{position:fixed;z-index:20;width:min(380px,calc(100vw - 32px));box-sizing:border-box;display:flex;flex-direction:column;gap:10px;padding:14px 14px 10px;border-radius:14px;background:var(--dr-solid);color:var(--dsw-alias-label-primary);border:.5px solid var(--dsw-alias-border-l2);box-shadow:0 12px 36px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.06);font-size:13px}
+.dr-pop-quote{margin:0;padding:0 0 0 10px;border-left:2px solid color-mix(in srgb,var(--dr-hl-line) 70%,transparent);font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-tertiary);white-space:pre-line;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .dr-pop-head{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .dr-pop-head b{flex:1;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .dr-pop-head b svg{color:var(--dr-hl-line)}
-.dr-pop-text{width:100%;box-sizing:border-box;resize:none;min-height:88px;padding:10px 12px;border-radius:10px;border:1px solid transparent;background:color-mix(in srgb,currentColor 5%,transparent);color:inherit;font:inherit;font-size:14px;line-height:1.7;outline:none;transition:border-color .15s,background .15s}
-.dr-pop-text:focus{border-color:color-mix(in srgb,var(--dr-hl-line) 55%,transparent);background:color-mix(in srgb,currentColor 2%,transparent)}
+.dr-pop-text{width:100%;box-sizing:border-box;resize:none;min-height:76px;padding:2px 0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;font-size:14.5px;line-height:1.7;outline:none}
 .dr-pop-text::placeholder{color:var(--dsw-alias-label-tertiary)}
-.dr-pop-hint{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
-.dr-pop-cancel,.dr-pop-save{height:30px;padding:0 14px;border-radius:8px;font:inherit;font-size:13px;cursor:pointer}
+.dr-pop-cancel,.dr-pop-save{height:30px;padding:0 14px;border-radius:999px;font:inherit;font-size:13px;cursor:pointer}
 .dr-pop-cancel{border:0;background:transparent;color:var(--dsw-alias-label-secondary)}
 .dr-pop-cancel:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dr-pop-save{border:0;background:#c56f16;color:#fff;font-weight:600}
 .dr-pop-save:hover:not(:disabled){filter:brightness(1.06)}
 .dr-pop-save:disabled{opacity:.4;cursor:default}
 .dr-pop-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dr-pop-bar{display:flex;align-items:center;gap:2px;margin:0 -4px;padding-top:8px;border-top:.5px solid var(--dsw-alias-border-l2)}
+.dr-pop-bar .dr-grow{flex:1}
+.dr-pop-icon{width:30px;height:30px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.dr-pop-icon:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dr-pop-icon-danger:hover{color:#c0392b}
+.dr-pop-tag{margin-left:6px;font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
+.dr-pop-bar .dr-pop-save{margin-left:4px}
 /* 随想 (notes on no quote): a dashed 写随想 button, then plain cards with when/where they were written. */
 .dr-booknotes{display:flex;flex-direction:column;gap:8px}
 .dr-notes .dr-booknotes{padding:2px 6px 10px}
@@ -781,6 +786,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       pen: 'M3.5 17h13M6 13.5l7.5-7.5 2 2-7.5 7.5H6z',
       copy: 'M7.5 7.5h8.5v8.5H7.5zM4.5 12.5v-8h8',
       chat: 'M4 4.5h12v8.5H9.5L6 16v-3H4z',
+      trash: 'M4 6h12M8 6V4.5h4V6M6 6l.7 10h6.6L14 6M8.5 9v4.5M11.5 9v4.5',
+      check: 'M4.5 10.5 8 14l7.5-8',
       up: 'M5 12.5 10 7.5l5 5',
       down: 'M5 7.5 10 12.5l5-5',
       panel: 'M3.5 4.5h13v11h-13zM12.5 4.5v11',
@@ -1132,7 +1139,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           : h('div', { className: 'dr-bd-list' },
             h('div', { className: 'dr-bd-chapter' }, '随想'),
             h(BookNotes, { notes: bookNotes, chapter: reading ? binding.chapter ?? 0 : null, save: saveNote, remove: removeNote }),
-            notes.length === 0 ? empty('原文上还没有笔记。在阅读区选中文字点「写想法」，或者点开一条高亮写下想法。')
+            notes.length === 0 ? empty('原文上还没有笔记。在阅读区选中文字点「写笔记」，或者点开一条高亮写笔记。')
               : grouped(notes, (m) => h('div', { key: m.id, className: 'dr-bd-note' },
               h('p', null, m.note),
               h('blockquote', null, plainQuote(m.quote)),
@@ -1321,28 +1328,41 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return h('div', { className, style, onMouseDown: (e) => { if (e.target.tagName !== 'TEXTAREA') e.preventDefault() } }, children)
     }
 
-    /** Edits a note: on a quote (a new or existing highlight), or about the whole book (`context` instead). */
-    function NoteEditor({ quote, title, context, initial, placeholder = '写下你的想法…', onSave, onCancel, extra }) {
+    /**
+     * Edits a note: on a quote (a new or existing highlight), or about the whole book (`context`
+     * instead). The quote sits small above the text; the text box grows with what is written; one
+     * bottom bar carries the highlight's own actions as icons on the left and 取消 / 保存 on the right.
+     * `actions`: [{ icon, label, onClick, danger }]; `tag`: a short note beside them (Agent 划的).
+     */
+    function NoteEditor({ quote, title, context, initial, placeholder = '写笔记…', onSave, onCancel, actions = [], tag }) {
       const [value, setValue] = useState(initial ?? '')
+      const box = useRef(null)
       // An empty new note has nothing to save; emptying an existing one clears it.
       const blank = !value.trim() && !initial
       const save = () => { if (!blank) onSave(value) }
+      // Grow with the text, up to about ten lines, then scroll.
+      useEffect(() => {
+        const el = box.current
+        if (!el) return
+        el.style.height = 'auto'
+        el.style.height = `${Math.min(el.scrollHeight, 260)}px`
+      }, [value])
       return h(React.Fragment, null,
         title || context ? h('div', { className: 'dr-pop-head' },
           title ? h('b', null, h(Icon, { name: 'note', size: 14 }), title) : null,
           context ? h('span', null, context) : null) : null,
-        quote ? h('blockquote', { className: 'dr-pop-quote' }, plainQuote(quote)) : null,
+        quote ? h('blockquote', { className: 'dr-pop-quote', title: plainQuote(quote) }, plainQuote(quote)) : null,
         h('textarea', {
-          className: 'dr-pop-text', rows: 4, autoFocus: true, placeholder, value,
+          ref: box, className: 'dr-pop-text', rows: 3, autoFocus: true, placeholder, value,
           onChange: (e) => setValue(e.target.value),
           onKeyDown: (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save(); if (e.key === 'Escape') onCancel() },
         }),
-        extra ? h('div', { className: 'dr-pop-row' }, extra) : null,
-        h('div', { className: 'dr-pop-row' },
-          h('span', { className: 'dr-pop-hint' }, '⌘↩ 保存'),
+        h('div', { className: 'dr-pop-bar' },
+          actions.map((a) => h('button', { key: a.label, type: 'button', className: 'dr-pop-icon' + (a.danger ? ' dr-pop-icon-danger' : ''), title: a.label, 'aria-label': a.label, onClick: a.onClick }, h(Icon, { name: a.icon, size: 16 }))),
+          tag ? h('span', { className: 'dr-pop-tag' }, tag) : null,
           h('span', { className: 'dr-grow' }),
           h('button', { type: 'button', className: 'dr-pop-cancel', onClick: onCancel }, '取消'),
-          h('button', { type: 'button', className: 'dr-pop-save', disabled: blank, onClick: save }, '保存')))
+          h('button', { type: 'button', className: 'dr-pop-save', disabled: blank, title: '⌘↩ 保存', onClick: save }, '保存')))
     }
 
 
@@ -1399,7 +1419,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
               h('button', { type: 'button', role: 'tab', 'aria-selected': tab === 'notes', onClick: () => setTab('notes') }, `笔记${highlights.length + notes.length ? ` ${highlights.length + notes.length}` : ''}`)),
             h('span', null, tab === 'toc' ? `${total} 节${done ? ` · ${done} 节有总结` : ''}` : `${highlights.length} 条划线 · ${notes.length + highlights.filter((m) => m.note).length} 条笔记`),
             h('button', { type: 'button', className: 'dr-nav', 'aria-label': '关闭目录', onClick: onClose }, h(Icon, { name: 'close' }))),
-          h('input', { className: 'dr-toc-search', placeholder: tab === 'toc' ? '搜章名或序号' : '搜划线或想法', value: query, autoFocus: !NARROW.matches, onChange: (e) => setQuery(e.target.value) }),
+          h('input', { className: 'dr-toc-search', placeholder: tab === 'toc' ? '搜章名或序号' : '搜划线或笔记', value: query, autoFocus: !NARROW.matches, onChange: (e) => setQuery(e.target.value) }),
           tab === 'notes' ? h(NotesList, { rows, highlights, notes, chapter: index, query: q, saveNote, removeNote, onLocate: (m) => { onLocate(m); onClose() } }) : h(React.Fragment, null,
           h('div', { className: 'dr-toc-progress' },
             h('div', null, h('span', null, `读到 ${index + 1} / ${total || '…'}`), h('span', null, `${percent}%`)),
@@ -1503,7 +1523,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return h('div', { className: 'dr-toc-list dr-notes' },
         h('div', { className: 'dr-toc-vol' }, '随想'),
         h(BookNotes, { notes: loose, chapter, save: saveNote, remove: removeNote }),
-        highlights.length === 0 ? h('p', { className: 'dr-note dr-notes-empty' }, '还没有划线。选中正文里的文字，就能划线或写想法。')
+        highlights.length === 0 ? h('p', { className: 'dr-note dr-notes-empty' }, '还没有划线。选中正文里的文字，就能划线或写笔记。')
           : shown.length === 0 ? h('p', { className: 'dr-note dr-notes-empty' }, '没有匹配的划线。')
             : shown.flatMap((m, i) => [
         m.chapter === shown[i - 1]?.chapter ? null : h('div', { key: `c${m.chapter}`, className: 'dr-toc-vol' }, `${m.chapter + 1} · ${rows[m.chapter]?.name ?? ''}`),
@@ -1715,7 +1735,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             ])),
         selection && !card ? h(Floating, { rect: selection.rect, below: selection.last, className: 'dr-tools' },
           h('button', { type: 'button', onClick: () => mark(selection) }, h(Icon, { name: 'pen', size: 15 }), '划线'),
-          h('button', { type: 'button', onClick: () => setCard({ kind: 'new', span: selection, rect: selection.rect, last: selection.last }) }, h(Icon, { name: 'note', size: 15 }), '写想法'),
+          h('button', { type: 'button', onClick: () => setCard({ kind: 'new', span: selection, rect: selection.rect, last: selection.last }) }, h(Icon, { name: 'note', size: 15 }), '写笔记'),
           h('button', { type: 'button', onClick: () => copy(text.slice(selection.at, selection.end)) }, h(Icon, { name: 'copy', size: 15 }), copied ? '已复制' : '复制'),
           h('button', { type: 'button', onClick: () => ask(text.slice(selection.at, selection.end)) }, h(Icon, { name: 'chat', size: 15 }), '问 Agent')) : null,
         card && card.kind !== 'book' ? h('div', { className: 'dr-pop-scrim', onMouseDown: () => setCard(null) }) : null,
@@ -1732,11 +1752,12 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             initial: opened.note,
             onCancel: () => setCard(null),
             onSave: (note) => { run(rpc('highlight-note', { bookId, id: opened.id, note })); setCard(null) },
-            extra: h(React.Fragment, null,
-              h('button', { type: 'button', className: 'dr-link dr-danger', onClick: () => { run(rpc('highlight-remove', { bookId, id: opened.id })); setCard(null) } }, '删除划线'),
-              h('button', { type: 'button', className: 'dr-link', onClick: () => copy(opened.quote) }, copied ? '已复制' : '复制'),
-              h('button', { type: 'button', className: 'dr-link', onClick: () => ask(opened.quote) }, '问 Agent'),
-              opened.by === 'agent' ? h('span', { className: 'dr-note' }, 'Agent 划的') : null),
+            actions: [
+              { icon: 'trash', label: '删除划线', danger: true, onClick: () => { run(rpc('highlight-remove', { bookId, id: opened.id })); setCard(null) } },
+              { icon: copied ? 'check' : 'copy', label: copied ? '已复制' : '复制原文', onClick: () => copy(opened.quote) },
+              { icon: 'chat', label: '问 Agent', onClick: () => ask(opened.quote) },
+            ],
+            tag: opened.by === 'agent' ? 'Agent 划的' : null,
           })) : null,
         card?.kind === 'book' ? h(NoteSheet, {
           title: '随想', context: `《${toc?.title ?? ''}》 · 读到第 ${index + 1} 节`, placeholder: '这本书让你想到什么…',

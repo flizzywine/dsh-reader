@@ -26,7 +26,7 @@ const HIGHLIGHT_LIMIT = 100
 function formatHighlight(h, toc) {
   const title = toc.chapters[h.chapter]?.title ?? ''
   const quote = h.quote.replace(/[\s\u3000]*\n[\s\u3000]*/g, ' / ').trim()
-  return `[${h.id}]${h.by === 'user' ? '（用户划的）' : ''} 第 ${h.chapter + 1} 节「${title}」：${quote}${h.note ? `\n    用户的想法：${h.note}` : ''}`
+  return `[${h.id}]${h.by === 'user' ? '（用户划的）' : ''} 第 ${h.chapter + 1} 节「${title}」：${quote}${h.note ? `\n    用户的笔记：${h.note}` : ''}`
 }
 
 function integer(args, name, fallback) {
@@ -157,7 +157,7 @@ export function readingTools({ library, bindingFor, updateBinding }) {
     },
     {
       name: 'find_highlights',
-      description: `检索这本书的划线和用户的笔记。笔记有两种：写在划线上的想法，和随想（不挂在原文上的笔记，记着用户写的时候读到第几节）。query 匹配原文或笔记里的文字；from/to 只限定划线所在的节（给了范围就不列随想）；都不填就列出全部。划线最多返回 ${HIGHLIGHT_LIMIT} 条，按书中顺序。用户问「我标过/划过哪些」「我记过什么」「之前写的感想」时用。笔记是用户自己写的，你只读不写。`,
+      description: `检索这本书的划线和用户的笔记。笔记有两种：写在划线上的笔记，和随想（不挂在原文上的笔记，记着用户写的时候读到第几节）。query 匹配原文或笔记里的文字；from/to 只限定划线所在的节（给了范围就不列随想）；都不填就列出全部。划线最多返回 ${HIGHLIGHT_LIMIT} 条，按书中顺序。用户问「我标过/划过哪些」「我记过什么」「之前写的感想」时用。笔记是用户自己写的，你只读不写。`,
       parameters: {
         type: 'object',
         properties: {
