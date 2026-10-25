@@ -4,6 +4,8 @@
 //   library/<书名>/原文.txt / 原文.epub      the imported file, untouched
 //   library/<书名>/目录.json                 { title, group?, chapters: [{ title, file, chars }] }; group is the
 //                                            书库 group the user put the book in
+//   library/分组.json                       { groups: [name] }: the groups in the user's order, so an
+//                                            empty group stays until it is deleted
 //   library/<书名>/章节/0001 第一章 xxx.txt
 //   library/<书名>/总结/0001 第一章 xxx.md    written by the agent through save_summary
 //   library/<书名>/划线.json                 { next, highlights: [{ id, chapter, at, quote, prefix, suffix, note, by, createdAt }],
@@ -25,6 +27,7 @@ export const TOC_FILE = '目录.json'
 export const CHAPTER_DIR = '章节'
 export const SUMMARY_DIR = '总结'
 export const HIGHLIGHT_FILE = '划线.json'
+export const GROUPS_FILE = '分组.json'
 
 /** A chapter longer than this is cut into parts; a book without headings is cut into chunks of PART_CHARS. */
 const MAX_CHAPTER_CHARS = 20000
@@ -183,17 +186,70 @@ export async function readToc(library, id) {
   return JSON.parse(await readFile(join(library, safeName(id), TOC_FILE), 'utf8'))
 }
 
-/** Put a book in a 书库 group; an empty name takes it out of any. */
-export async function setGroup(library, id, group) {
-  const name = String(group ?? '').replace(/\s+/g, ' ').trim()
-  if (name.length > 20) throw new Error('分组名最多 20 个字')
-  const toc = await readToc(library, id)
-  if (name) toc.group = name
-  else delete toc.group
-  const path = join(library, safeName(id), TOC_FILE)
-  await writeFile(`${path}.tmp`, JSON.stringify(toc, null, 2))
+async function writeJson(path, value) {
+  await writeFile(`${path}.tmp`, JSON.stringify(value, null, 2))
   await rename(`${path}.tmp`, path)
-  return { group: toc.group ?? null }
+}
+
+function groupName(name) {
+  const clean = String(name ?? '').replace(/\s+/g, ' ').trim()
+  if (clean.length > 20) throw new Error('分组名最多 20 个字')
+  return clean
+}
+
+async function writeGroup(library, id, group) {
+  const toc = await readToc(library, id)
+  if (group) toc.group = group
+  else delete toc.group
+  await writeJson(join(library, safeName(id), TOC_FILE), toc)
+}
+
+/** 书库 groups in the user's order; a group some book names but the list lacks is added at the end. */
+export async function readGroups(library) {
+  let groups = []
+  try { groups = JSON.parse(await readFile(join(library, GROUPS_FILE), 'utf8')).groups ?? [] } catch { /* none yet */ }
+  for (const book of await listBooks(library)) if (book.group && !groups.includes(book.group)) groups.push(book.group)
+  return groups
+}
+
+const writeGroups = (library, groups) => writeJson(join(library, GROUPS_FILE), { groups })
+
+export async function createGroup(library, name) {
+  const group = groupName(name)
+  if (!group) throw new Error('分组名不能为空')
+  const groups = await readGroups(library)
+  if (groups.includes(group)) throw new Error(`已经有「${group}」这个分组`)
+  await writeGroups(library, [...groups, group])
+  return groups.concat(group)
+}
+
+/** Rename a group, in the list and on every book in it. */
+export async function renameGroup(library, from, to) {
+  const group = groupName(to)
+  if (!group) throw new Error('分组名不能为空')
+  const groups = await readGroups(library)
+  if (group !== from && groups.includes(group)) throw new Error(`已经有「${group}」这个分组`)
+  for (const book of await listBooks(library)) if (book.group === from) await writeGroup(library, book.id, group)
+  const next = groups.map((g) => g === from ? group : g)
+  await writeGroups(library, next)
+  return next
+}
+
+/** Delete a group; its books become 未分组. */
+export async function deleteGroup(library, name) {
+  for (const book of await listBooks(library)) if (book.group === name) await writeGroup(library, book.id, null)
+  const next = (await readGroups(library)).filter((g) => g !== name)
+  await writeGroups(library, next)
+  return next
+}
+
+/** Put books in a 书库 group (made if new); an empty name takes them out of any. */
+export async function setGroup(library, ids, group) {
+  const name = groupName(group)
+  for (const id of ids) await writeGroup(library, id, name || null)
+  const groups = await readGroups(library)
+  await writeGroups(library, groups)
+  return { group: name || null, groups }
 }
 
 function chapterAt(toc, index) {

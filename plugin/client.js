@@ -282,9 +282,31 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 @media (max-width:1023px){body.dsh-reader-shell-active :is([role="menu"],:has(>[aria-modal="true"]),.dr-overlay){z-index:1300!important}}
 .dr-dialog-head h3{margin:0;font-size:16px;flex:1}
 .dr-dialog-list{overflow:auto;display:flex;flex-direction:column;gap:8px}
-.dr-group{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;font-weight:600;padding:6px 2px 0;cursor:pointer;text-align:left}
-.dr-group em{font-style:normal;font-weight:400;color:var(--dsw-alias-label-tertiary)}
-.dr-group svg{margin-left:auto;color:var(--dsw-alias-label-tertiary)}
+.dr-bb-tools{display:flex;gap:6px;align-items:center;flex:none}
+.dr-bb-search{flex:1;min-width:0;height:32px;box-sizing:border-box;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:var(--dsw-specific-input-major,transparent);color:inherit;font:inherit;font-size:13px}
+.dr-gf{position:relative;flex:none}
+.dr-gf-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;width:112px;height:32px;box-sizing:border-box;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:var(--dsw-specific-input-major,transparent);color:inherit;font:inherit;font-size:13px;cursor:pointer}
+.dr-gf-summary span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dr-gf-summary svg{opacity:.6;flex:none}
+.dr-gf-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:50;width:min(220px,75vw);box-sizing:border-box;padding:5px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);border-radius:12px;background:var(--dr-solid);box-shadow:0 8px 24px #0003}
+.dr-gf-options{max-height:280px;overflow-y:auto}
+.dr-gf-menu button{display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:6px 10px;border:0;border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.dr-gf-menu button:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dr-gf-menu button[aria-pressed="true"]{font-weight:600;color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 13%,transparent)}
+.dr-gf-menu em{font-style:normal;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dr-gf-menu button>span{width:16px;margin-left:auto;text-align:center}
+.dr-gf-footer{border-top:1px solid color-mix(in srgb,currentColor 10%,transparent);margin:5px 5px 0;padding-top:5px}
+.dr-gf-footer button{font-size:12px;color:var(--dsw-alias-label-secondary);padding-left:6px}
+.dr-bb-batch{display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex:none;padding:6px 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px}
+.dr-bb-batch label{display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer}
+.dr-bb-batch .dr-note{flex:1}
+.dr-bb-batch select{height:28px;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:12.5px}
+.dr-card-pick{cursor:pointer}
+.dr-bb-list{display:flex;flex-direction:column;gap:10px}
+.dr-overlay-top{z-index:1100}
+.dr-gm{width:min(440px,100%)}
+.dr-gm-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--dsw-alias-border-l2)}
+.dr-gm-row>span{flex:1;min-width:0;overflow-wrap:anywhere}
 .dr-bd-group{align-self:flex-start;max-width:100%;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:12.5px;padding:3px 6px}
 .dr-error{color:#e5484d;font-size:12px;margin:0}
 .dr-persona{height:100%;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary)}
@@ -378,14 +400,14 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return sessionId === undefined ? undefined : store.get(sessionId)
     }
 
-    /** Book list, re-read whenever an import lands. */
+    /** Book list and 书库 groups, re-read whenever an import or a group change lands. */
     function useLibrary(app) {
       const version = useSignal(app.libraryChanged)
-      const [state, setState] = useState({ books: null, error: null })
+      const [state, setState] = useState({ books: null, groups: [], error: null })
       useEffect(() => {
         let live = true
-        app.rpc('library').then((books) => live && setState({ books, error: null }),
-          (e) => live && setState({ books: [], error: String(e?.message ?? e) }))
+        Promise.all([app.rpc('library'), app.rpc('groups')]).then(([books, groups]) => live && setState({ books, groups, error: null }),
+          (e) => live && setState({ books: [], groups: [], error: String(e?.message ?? e) }))
         return () => { live = false }
       }, [version])
       return state
@@ -420,58 +442,131 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         error ? h('p', { className: 'dr-error' }, error) : null)
     }
 
-    const UNGROUPED = '未分组'
-    const COLLAPSED_KEY = 'dsh-reader:collapsed-groups'
+    const ALL = '\u0000all'
+    const UNGROUPED = '\u0000none'
 
-    /** Group names in use, sorted. */
-    const groupNames = (books) => [...new Set(books.map((b) => b.group).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh'))
+    /** Run a 书库 change, then re-read the library; failures are shown as an alert, as elsewhere. */
+    const libraryWork = (app, work) => work.then(() => app.libraryChanged.bump(), (e) => window.alert(String(e?.message ?? e)))
+    const askGroupName = (current = '') => window.prompt(current ? '新的分组名' : '新分组的名字（比如：八字、周易、佛学）', current)?.trim()
+
+    /** 分组 dropdown like tavern's: 全部, 未分组, each group, then 创建分组 / 管理分组. */
+    function GroupFilter({ app, books, groups, value, onChange, onManage }) {
+      const ref = useRef(null)
+      const [open, setOpen] = useState(false)
+      useEffect(() => {
+        if (!open) return
+        const away = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
+        document.addEventListener('pointerdown', away)
+        return () => document.removeEventListener('pointerdown', away)
+      }, [open])
+      const count = (group) => books.filter((b) => group === ALL || (b.group ?? UNGROUPED) === group).length
+      const label = (group) => group === ALL ? '全部' : group === UNGROUPED ? '未分组' : group
+      const pick = (group) => { onChange(group); setOpen(false) }
+      const option = (group) => h('button', { key: group, type: 'button', 'aria-pressed': value === group, onClick: () => pick(group) },
+        label(group), h('em', null, count(group)), h('span', null, value === group ? '✓' : ''))
+      return h('div', { ref, className: 'dr-gf' },
+        h('button', { type: 'button', className: 'dr-gf-summary', 'aria-expanded': open, onClick: () => setOpen(!open) },
+          h('span', null, label(value)), h(Icon, { name: open ? 'up' : 'down', size: 14 })),
+        open ? h('div', { className: 'dr-gf-menu', role: 'menu' },
+          h('div', { className: 'dr-gf-options' }, [ALL, UNGROUPED, ...groups].map(option)),
+          h('div', { className: 'dr-gf-footer' },
+            h('button', { type: 'button', onClick: () => {
+              setOpen(false)
+              const name = askGroupName()
+              if (name) libraryWork(app, app.rpc('group-create', { name }).then(() => onChange(name)))
+            } }, '＋ 创建分组'),
+            h('button', { type: 'button', onClick: () => { setOpen(false); onManage() } }, '管理分组'))) : null)
+    }
+
+    /** 管理分组 dialog: rename or delete each group, add one, or go sort books in bulk. */
+    function GroupManager({ app, groups, onClose, onBatch }) {
+      return createPortal(h('div', { className: 'dr-overlay dr-overlay-top', onPointerDown: (e) => { if (e.target === e.currentTarget) onClose() } },
+        h('div', { className: 'dr-dialog dr-gm', role: 'dialog', 'aria-label': '管理分组' },
+          h('div', { className: 'dr-dialog-head' }, h('h3', null, '管理分组'), h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '关闭')),
+          groups.length === 0 ? h('p', { className: 'dr-note' }, '还没有分组。') : groups.map((g) => h('div', { key: g, className: 'dr-gm-row' },
+            h('span', null, g),
+            h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => {
+              const to = askGroupName(g)
+              if (to && to !== g) libraryWork(app, app.rpc('group-rename', { from: g, to }))
+            } }, '重命名'),
+            h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', onClick: () => {
+              if (window.confirm(`删除分组「${g}」？里面的书会变成未分组，书本身不动。`)) libraryWork(app, app.rpc('group-delete', { name: g }))
+            } }, '删除'))),
+          h('div', { className: 'dr-row' },
+            h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => {
+              const name = askGroupName()
+              if (name) libraryWork(app, app.rpc('group-create', { name }))
+            } }, '＋ 创建分组'),
+            h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => { onClose(); onBatch() } }, '批量整理书籍')))), document.body)
+    }
 
     /**
-     * Books under their 书库 group, each group folding away (remembered in this browser); books with
-     * no group come last under 未分组. A library nobody has grouped stays a plain list.
+     * The book list with tavern's tools above it: 分组 filter, search, and 批量管理 (tick books, then
+     * 移动到分组). `card(book)` draws one book; the list goes in a div of `listClass`, so a scrolling
+     * list does not clip the 分组 menu above it.
      */
-    function GroupedBooks({ books, card }) {
-      const [collapsed, setCollapsed] = useState(() => {
-        try { return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]')) } catch { return new Set() }
-      })
-      const names = groupNames(books)
-      if (names.length === 0) return books.map(card)
-      const toggle = (name) => setCollapsed((set) => {
+    function BookBrowser({ app, books, groups, card, listClass = 'dr-bb-list' }) {
+      const [group, setGroup] = useState(ALL)
+      const [query, setQuery] = useState('')
+      const [managing, setManaging] = useState(false)
+      const [batch, setBatch] = useState(null)
+      // A group renamed or deleted elsewhere falls back to 全部.
+      const shownGroup = group === ALL || group === UNGROUPED || groups.includes(group) ? group : ALL
+      const q = query.trim().toLowerCase()
+      const shown = books.filter((b) => (shownGroup === ALL || (b.group ?? UNGROUPED) === shownGroup) && (!q || b.title.toLowerCase().includes(q)))
+      const toggle = (id) => setBatch((set) => {
         const next = new Set(set)
-        next.has(name) ? next.delete(name) : next.add(name)
-        try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next])) } catch {}
+        next.has(id) ? next.delete(id) : next.add(id)
         return next
       })
-      return [...names, UNGROUPED].flatMap((name) => {
-        const list = books.filter((b) => (b.group ?? UNGROUPED) === name)
-        if (list.length === 0) return []
-        const open = !collapsed.has(name)
-        return [
-          h('button', { key: `g:${name}`, type: 'button', className: 'dr-group', 'aria-expanded': open, onClick: () => toggle(name) },
-            name, h('em', null, list.length), h(Icon, { name: open ? 'up' : 'down', size: 14 })),
-          ...(open ? list.map(card) : []),
-        ]
-      })
+      const allPicked = batch && shown.length > 0 && shown.every((b) => batch.has(b.id))
+      function move(event) {
+        let target = event.target.value
+        event.target.value = ''
+        if (!target || batch.size === 0) return
+        if (target === '\u0000new') target = askGroupName()
+        if (!target) return
+        libraryWork(app, app.rpc('book-group', { bookIds: [...batch], group: target === UNGROUPED ? '' : target }).then(() => setBatch(new Set())))
+      }
+      return h(React.Fragment, null,
+        h('div', { className: 'dr-bb-tools' },
+          h(GroupFilter, { app, books, groups, value: shownGroup, onChange: setGroup, onManage: () => setManaging(true) }),
+          h('input', { className: 'dr-bb-search', type: 'search', placeholder: '搜索书名', value: query, onChange: (e) => setQuery(e.target.value) }),
+          batch ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => setBatch(new Set()) }, '批量管理')),
+        batch ? h('div', { className: 'dr-bb-batch' },
+          h('label', null, h('input', { type: 'checkbox', checked: allPicked, onChange: () => setBatch(allPicked ? new Set() : new Set(shown.map((b) => b.id))) }), '全选'),
+          h('span', { className: 'dr-note' }, batch.size ? `已选 ${batch.size} 本` : '点书选择'),
+          h('select', { value: '', disabled: batch.size === 0, onChange: move },
+            h('option', { value: '' }, '移动到分组…'),
+            groups.map((g) => h('option', { key: g, value: g }, g)),
+            h('option', { value: UNGROUPED }, '未分组'),
+            h('option', { value: '\u0000new' }, '新建分组…')),
+          h('button', { type: 'button', className: 'dr-btn', onClick: () => setBatch(null) }, '完成')) : null,
+        h('div', { className: listClass }, shown.length === 0 ? h('p', { className: 'dr-note' }, q ? '没有书名匹配的书。' : '这个分组里还没有书。')
+          : shown.map((b) => batch
+            ? h('label', { key: b.id, className: 'dr-card dr-card-pick' },
+              h('input', { type: 'checkbox', checked: batch.has(b.id), onChange: () => toggle(b.id) }),
+              h('div', { className: 'dr-card-text' },
+                h('div', { className: 'dr-card-title' }, b.title),
+                h('div', { className: 'dr-card-meta' }, `${b.group ?? '未分组'} · ${b.chars.toLocaleString()} 字 · ${b.chapters} 节`)))
+            : card(b))),
+        managing ? h(GroupManager, { app, groups, onClose: () => setManaging(false), onBatch: () => setBatch(new Set()) }) : null)
     }
 
     /** 分组 picker on a book's page: an existing group, none, or a new one. */
     function GroupSelect({ app, book, groups }) {
-      const NEW = '\u0000new'
-      async function change(event) {
+      function change(event) {
         let group = event.target.value
-        if (group === NEW) {
-          group = window.prompt('新分组的名字（比如：八字、周易、佛学）')?.trim()
+        if (group === '\u0000new') {
+          group = askGroupName()
           if (!group) { event.target.value = book.group ?? ''; return }
         }
-        try {
-          await app.rpc('book-group', { bookId: book.id, group })
-          app.libraryChanged.bump()
-        } catch (e) { window.alert(String(e?.message ?? e)) }
+        libraryWork(app, app.rpc('book-group', { bookId: book.id, group }))
       }
       return h('select', { className: 'dr-bd-group', value: book.group ?? '', onChange: change, title: '书库分组' },
         h('option', { value: '' }, groups.length ? '分组：未分组' : '未分组'),
         groups.map((g) => h('option', { key: g, value: g }, `分组：${g}`)),
-        h('option', { value: NEW }, '新建分组…'))
+        h('option', { value: '\u0000new' }, '新建分组…'))
     }
 
     /**
@@ -479,7 +574,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      * 书库 page are reached from here, as tavern reaches its card tools from the picker.
      */
     function BookPicker({ app, onClose, onLibrary }) {
-      const { books, error } = useLibrary(app)
+      const { books, groups, error } = useLibrary(app)
       const [starting, setStarting] = useState(null)
       const [failure, setFailure] = useState(null)
       async function start(bookId) {
@@ -496,16 +591,15 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '关闭')),
           h('p', { className: 'dr-note' }, '每本书开一个新对话；Agent 以当前的工作台性格陪你读。'),
           failure ? h('p', { className: 'dr-error' }, failure) : null,
-          h('div', { className: 'dr-dialog-list' },
-            error ? h('p', { className: 'dr-error' }, error)
-              : books === null ? h('p', { className: 'dr-note' }, '读取中…')
-                : books.length === 0 ? h('p', { className: 'dr-note' }, '书库是空的，先导入一本 TXT、EPUB 或 PDF。')
-                  : h(GroupedBooks, { books, card: (b) => h('div', { key: b.id, className: 'dr-card' },
+          error ? h('p', { className: 'dr-error' }, error)
+            : books === null ? h('p', { className: 'dr-note' }, '读取中…')
+              : books.length === 0 ? h('p', { className: 'dr-note' }, '书库是空的，先导入一本 TXT、EPUB 或 PDF。')
+                : h(BookBrowser, { app, books, groups, listClass: 'dr-dialog-list', card: (b) => h('div', { key: b.id, className: 'dr-card' },
                     h('div', { className: 'dr-card-text' },
                       h('div', { className: 'dr-card-title' }, b.title),
                       h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`)),
                     h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: starting !== null, onClick: () => start(b.id) },
-                      starting === b.id ? '正在打开…' : '开始阅读')) })))), document.body)
+                      starting === b.id ? '正在打开…' : '开始阅读')) }))), document.body)
     }
 
     /** Small line icons (16px, currentColor) for the sidebar. */
@@ -810,7 +904,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 
     /** Right Sidebar 书库 page: one card per book, like tavern's 人物卡库; a card opens the book's page. */
     function LibraryTab({ sessionId, app }) {
-      const { books, error } = useLibrary(app)
+      const { books, groups, error } = useLibrary(app)
       const binding = useBinding(app.store, sessionId)
       const [failure, setFailure] = useState(null)
       const [detail, setDetail] = useState(null)
@@ -820,7 +914,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const here = (bookId) => run(app.store.bind(sessionId, { bookId }))
       const fresh = (bookId) => run(app.startReading(bookId))
       const shown = detail && books?.find((b) => b.id === detail)
-      if (shown) return h(BookDetail, { app, book: shown, groups: groupNames(books), sessionId, binding, onBack: () => setDetail(null), here, fresh })
+      if (shown) return h(BookDetail, { app, book: shown, groups, sessionId, binding, onBack: () => setDetail(null), here, fresh })
       return h('div', { className: 'dr-lib' },
         h('div', { className: 'dr-lib-head' },
           h('div', null,
@@ -831,7 +925,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         error ? h('p', { className: 'dr-error' }, error)
           : books === null ? h('p', { className: 'dr-note' }, '读取中…')
             : books.length === 0 ? h('p', { className: 'dr-note' }, '书库是空的。')
-              : h(GroupedBooks, { books, card: (b) => h('div', { key: b.id, className: 'dr-card' + (b.id === current ? ' dr-card-on' : '') },
+              : h(BookBrowser, { app, books, groups, card: (b) => h('div', { key: b.id, className: 'dr-card' + (b.id === current ? ' dr-card-on' : '') },
                 h('button', { type: 'button', className: 'dr-card-text dr-card-link', title: '看详情和总结', onClick: () => setDetail(b.id) },
                   h('div', { className: 'dr-card-title' }, (b.id === current ? '✓ ' : '') + b.title),
                   h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`

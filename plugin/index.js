@@ -5,7 +5,7 @@ import { dirname, join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, setGroup, BOOK_TYPES } from './books.js'
+import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, setGroup, readGroups, createGroup, renameGroup, deleteGroup, BOOK_TYPES } from './books.js'
 import { activePersonaText, managePersona, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 
@@ -71,8 +71,17 @@ async function handleCall(endpoint, payload = {}) {
     case 'library':
       await migrateLibrary()
       return listBooks(LIBRARY)
+    case 'groups':
+      return readGroups(LIBRARY)
+    case 'group-create':
+      return createGroup(LIBRARY, payload.name)
+    case 'group-rename':
+      return renameGroup(LIBRARY, payload.from, payload.to)
+    case 'group-delete':
+      return deleteGroup(LIBRARY, payload.name)
+    // One book (bookId) or several (bookIds) into a group; '' takes them out.
     case 'book-group':
-      return setGroup(LIBRARY, payload.bookId, payload.group)
+      return setGroup(LIBRARY, payload.bookIds ?? [payload.bookId], payload.group)
     case 'toc': {
       const toc = await readToc(LIBRARY, payload.bookId)
       const done = await summarized(LIBRARY, payload.bookId)
