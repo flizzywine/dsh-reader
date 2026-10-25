@@ -307,7 +307,11 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 .dr-gm{width:min(440px,100%)}
 .dr-gm-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dr-gm-row>span{flex:1;min-width:0;overflow-wrap:anywhere}
-.dr-bd-group{align-self:flex-start;max-width:100%;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:12.5px;padding:3px 6px}
+.dr-bd-group{align-self:flex-start;max-width:100%}
+.dr-bd-group-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;height:26px;box-sizing:border-box;padding:0 9px 0 8px;border:0;border-radius:999px;background:color-mix(in srgb,currentColor 7%,transparent);color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;cursor:pointer}
+.dr-bd-group-chip:hover,.dr-bd-group-chip[aria-expanded="true"]{background:color-mix(in srgb,currentColor 12%,transparent);color:var(--dsw-alias-label-primary)}
+.dr-bd-group-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dr-bd-group-chip svg{flex:none;opacity:.7}
 .dr-error{color:#e5484d;font-size:12px;margin:0}
 .dr-persona{height:100%;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary)}
 .dr-persona textarea{flex:1;min-height:240px;resize:vertical;font:inherit;font-size:13px;line-height:1.6;color:inherit;background:var(--dsw-alias-bg-module-platform);border:none;border-radius:10px;padding:12px}
@@ -449,9 +453,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     const libraryWork = (app, work) => work.then(() => app.libraryChanged.bump(), (e) => window.alert(String(e?.message ?? e)))
     const askGroupName = (current = '') => window.prompt(current ? '新的分组名' : '新分组的名字（比如：八字、周易、佛学）', current)?.trim()
 
-    /** 分组 dropdown like tavern's: 全部, 未分组, each group, then 创建分组 / 管理分组. */
-    function GroupFilter({ app, books, groups, value, onChange, onManage }) {
-      const ref = useRef(null)
+    /** Open state for a dropdown in `ref`, closed by a press anywhere outside it. */
+    function useDropdown(ref) {
       const [open, setOpen] = useState(false)
       useEffect(() => {
         if (!open) return
@@ -459,6 +462,13 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         document.addEventListener('pointerdown', away)
         return () => document.removeEventListener('pointerdown', away)
       }, [open])
+      return [open, setOpen]
+    }
+
+    /** 分组 dropdown like tavern's: 全部, 未分组, each group, then 创建分组 / 管理分组. */
+    function GroupFilter({ app, books, groups, value, onChange, onManage }) {
+      const ref = useRef(null)
+      const [open, setOpen] = useDropdown(ref)
       const count = (group) => books.filter((b) => group === ALL || (b.group ?? UNGROUPED) === group).length
       const label = (group) => group === ALL ? '全部' : group === UNGROUPED ? '未分组' : group
       const pick = (group) => { onChange(group); setOpen(false) }
@@ -553,20 +563,28 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         managing ? h(GroupManager, { app, groups, onClose: () => setManaging(false), onBatch: () => setBatch(new Set()) }) : null)
     }
 
-    /** 分组 picker on a book's page: an existing group, none, or a new one. */
+    /** 分组 chip on a book's page, opening the same menu as the 书库 filter: 未分组, each group, 新建分组. */
     function GroupSelect({ app, book, groups }) {
-      function change(event) {
-        let group = event.target.value
-        if (group === '\u0000new') {
-          group = askGroupName()
-          if (!group) { event.target.value = book.group ?? ''; return }
-        }
-        libraryWork(app, app.rpc('book-group', { bookId: book.id, group }))
+      const ref = useRef(null)
+      const [open, setOpen] = useDropdown(ref)
+      const current = book.group ?? ''
+      const pick = (group) => {
+        setOpen(false)
+        if (group !== current) libraryWork(app, app.rpc('book-group', { bookId: book.id, group }))
       }
-      return h('select', { className: 'dr-bd-group', value: book.group ?? '', onChange: change, title: '书库分组' },
-        h('option', { value: '' }, groups.length ? '分组：未分组' : '未分组'),
-        groups.map((g) => h('option', { key: g, value: g }, `分组：${g}`)),
-        h('option', { value: '\u0000new' }, '新建分组…'))
+      const option = (group, label) => h('button', { key: group || '\u0000none', type: 'button', 'aria-pressed': current === group, onClick: () => pick(group) },
+        label, h('span', null, current === group ? '✓' : ''))
+      return h('div', { ref, className: 'dr-gf dr-bd-group' },
+        h('button', { type: 'button', className: 'dr-bd-group-chip', 'aria-expanded': open, title: '书库分组', onClick: () => setOpen(!open) },
+          h(Icon, { name: 'folder', size: 13 }), h('span', null, current || '未分组'), h(Icon, { name: open ? 'up' : 'down', size: 12 })),
+        open ? h('div', { className: 'dr-gf-menu', role: 'menu' },
+          h('div', { className: 'dr-gf-options' }, option('', '未分组'), groups.map((g) => option(g, g))),
+          h('div', { className: 'dr-gf-footer' },
+            h('button', { type: 'button', onClick: () => {
+              setOpen(false)
+              const name = askGroupName()
+              if (name) libraryWork(app, app.rpc('book-group', { bookId: book.id, group: name }))
+            } }, '＋ 新建分组'))) : null)
     }
 
     /**
