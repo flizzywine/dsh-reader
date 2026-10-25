@@ -74,11 +74,26 @@ const mode = (values) => {
 }
 
 /**
+ * Where full lines end: the farthest line end that several lines reach (within half a character),
+ * so one line that sticks out past the column (a ►► marker, a wide glyph, a URL) does not move the
+ * edge and make every ordinary full line look short.
+ */
+function rightEdge(lines) {
+  const ends = lines.map((l) => l.x1).sort((a, b) => b - a)
+  const need = Math.max(2, Math.ceil(lines.length * 0.15))
+  const size = mode(lines.map((l) => Math.round(l.y1 - l.y0))) || 10
+  // Justified full lines end within about half a character of each other.
+  for (const end of ends) if (ends.filter((e) => e <= end && e >= end - size * 0.5).length >= need) return end
+  return ends[0]
+}
+
+/**
  * Left and right edge of the body text around each line: the most common line start and the
- * farthest line end of its flow, or of its page when the flow is a heading or a few stray lines.
+ * common line end (see rightEdge) of its flow, or of its page when the flow is a heading or a few
+ * stray lines.
  */
 function margins(pages) {
-  const edge = (lines) => ({ left: mode(lines.map((l) => Math.round(l.x0))), right: Math.max(...lines.map((l) => l.x1)) })
+  const edge = (lines) => ({ left: mode(lines.map((l) => Math.round(l.x0))), right: rightEdge(lines) })
   const pageEdges = pages.map((page) => page.lines.length >= 5 ? edge(page.lines) : null)
   const fallback = pageEdges.find(Boolean) ?? { left: 0, right: pages[0]?.width ?? 0 }
   const edges = new Map()
@@ -97,16 +112,26 @@ function margins(pages) {
  * of `line` would not have fit at the end of `prev` (so the typesetter wrapped it), the new line
  * is not indented, and there is no gap or change of type size between them.
  */
-function continues(prev, prevEdge, line, edge, samePage, ocr) {
+function continues(prev, prevEdge, line, edge, samePage, ocr, running) {
   const size = line.y1 - line.y0
   const prevSize = prev.y1 - prev.y0
   // Recognised line boxes vary in height with the letters on them, so OCR gives no type size.
-  if (!ocr && Math.abs(size - prevSize) > prevSize * 0.15) return false
+  // Box heights wobble with the glyphs on a line (Latin letters, ►); a heading differs by more.
+  if (!ocr && Math.abs(size - prevSize) > prevSize * 0.25) return false
   // A contents line: dot leaders running to the page number at the right edge.
   if (/[.…·．]{4,}\s*\d+$/.test(prev.text)) return false
   if (line.x0 > edge.left + size * 0.8) return false
   if (samePage && line.y0 - prev.y1 > size * 1.2) return false
-  const word = CJK.test(line.text[0]) ? size : (line.text.match(/^\S+/)?.[0].length ?? 1) * size * 0.5 + size * 0.3
+  // Across a page break, the page's last line may stop short with its sentence still open: when
+  // the line above ran on into it (so it is the tail of running text, not a verse or a heading),
+  // the paragraph carries on into the next page.
+  if (!samePage && running && !/[。！？!?.…”"」』）)：:；;]$/.test(prev.text.trim())) return true
+  // A sentence that ends short of the edge ends its paragraph: full lines are justified to the edge.
+  if (/[。！？…”」』]$/.test(prev.text.trim()) && prev.x1 < prevEdge.right - size * 0.5) return false
+  // The first unbreakable run of the next line: one CJK character (Chinese breaks anywhere), else
+  // the leading Latin/symbol run up to a space or the first CJK character (►►所以 breaks after ►►).
+  const lead = line.text.match(/^[^\s\u2e80-\u9fff\uf900-\ufaff\uff00-\uffef\u3000-\u303f]+/)?.[0]
+  const word = !lead ? size : lead.length * size * 0.5 + size * 0.3
   return prev.x1 + word > prevEdge.right - size * 0.3
 }
 
@@ -117,7 +142,7 @@ function paragraphs(pages, ocr) {
   let prev = null
   for (const [i, page] of pages.entries()) {
     for (const line of page.lines) {
-      if (prev && continues(prev.line, edges.get(prev.line), line, edges.get(line), prev.page === i, ocr)) {
+      if (prev && continues(prev.line, edges.get(prev.line), line, edges.get(line), prev.page === i, ocr, out.at(-1).lines > 1)) {
         const last = out.at(-1)
         last.text = glue(last.text, line.text)
         last.lines += 1

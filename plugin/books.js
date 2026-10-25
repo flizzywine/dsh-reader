@@ -397,3 +397,73 @@ export async function addHighlight(library, id, { index, at, end, by, note = '' 
     return { highlight, existed: false }
   })
 }
+
+/** Text without whitespace, and where each kept character sat in the original. */
+function squeeze(text) {
+  let out = ''
+  const at = []
+  for (let i = 0; i < text.length; i += 1) {
+    if (/\s/.test(text[i])) continue
+    out += text[i]
+    at.push(i)
+  }
+  return { out, at }
+}
+
+const SOURCES = [[SOURCE_PDF, '.pdf'], [SOURCE_EPUB, '.epub'], [SOURCE_FILE, '.txt']]
+
+/**
+ * 重新排版: split a book again from its original file with the current rules, keeping its title,
+ * group, highlights and notes. Line breaks and chapter boundaries may move, so each highlight is
+ * found again by its quote with whitespace ignored (its chapter, offset and context updated); one
+ * that cannot be found keeps its old place. Summaries stay when the chapters are the same; when they
+ * changed, the old ones move to 总结/重新排版前/ rather than sit beside the wrong chapters.
+ * `onProgress` reports OCR pages for a scanned PDF.
+ */
+export async function reparseBook(library, id, { onProgress } = {}) {
+  const dir = join(library, safeName(id))
+  const old = await readToc(library, id)
+  let source = null
+  for (const [file, ext] of SOURCES) {
+    try { await stat(join(dir, file)); source = { file, ext }; break } catch { /* try the next */ }
+  }
+  if (!source) throw new Error('找不到这本书的原文文件')
+  const buffer = await readFile(join(dir, source.file))
+  const book = await parseBook(source.ext, buffer, { onProgress })
+
+  const sameChapters = book.parts.length === old.chapters.length && book.parts.every((p, i) => p.title === old.chapters[i].title)
+  const done = await summarized(library, id)
+  if (!sameChapters && done.size > 0) {
+    const aside = join(dir, SUMMARY_DIR, '重新排版前')
+    await mkdir(aside, { recursive: true })
+    for (const file of done) await rename(join(dir, SUMMARY_DIR, file), join(aside, file))
+  }
+  await rm(join(dir, CHAPTER_DIR), { recursive: true, force: true })
+  const toc = await writeBook(library, safeName(id), buffer, book)
+  // writeBook names the book after its folder; keep what the user called it and its group.
+  const next = { ...toc, title: old.title, ...(old.group ? { group: old.group } : {}) }
+  await writeFile(join(dir, TOC_FILE), JSON.stringify(next, null, 2))
+
+  const texts = book.parts.map((p) => p.text.replace(/\r\n?/g, '\n'))
+  const squeezed = texts.map(squeeze)
+  let found = 0
+  let lost = 0
+  await updateHighlights(library, id, (list, _newId, notes) => {
+    for (const h of list) {
+      const q = squeeze(h.quote).out
+      const hit = q ? squeezed.findIndex((s) => s.out.includes(q)) : -1
+      if (hit < 0) { lost += 1; continue }
+      const s = squeezed[hit]
+      const start = s.out.indexOf(q)
+      const at = s.at[start]
+      const end = s.at[start + q.length - 1] + 1
+      Object.assign(h, {
+        chapter: hit, at, quote: texts[hit].slice(at, end),
+        prefix: texts[hit].slice(Math.max(0, at - CONTEXT_CHARS), at), suffix: texts[hit].slice(end, end + CONTEXT_CHARS),
+      })
+      found += 1
+    }
+    for (const n of notes) if (Number.isInteger(n.chapter)) n.chapter = Math.min(n.chapter, book.parts.length - 1)
+  })
+  return { chapters: book.parts.length, before: old.chapters.length, highlights: { found, lost }, summariesMoved: !sameChapters && done.size > 0 ? done.size : 0 }
+}

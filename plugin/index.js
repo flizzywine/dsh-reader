@@ -5,7 +5,7 @@ import { dirname, join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, setGroup, renameBook, bookContents, trashBook, readGroups, createGroup, renameGroup, deleteGroup, BOOK_TYPES } from './books.js'
+import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, setGroup, renameBook, bookContents, trashBook, reparseBook, readGroups, createGroup, renameGroup, deleteGroup, BOOK_TYPES } from './books.js'
 import { managePersona, moveGroupPersona, personaFor, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 import { RANGES, cleanSymbol, stockData, stockTools } from './stocks.js'
@@ -113,6 +113,22 @@ async function handleCall(endpoint, payload = {}) {
           : { ...b, bookId: b.bookId === from ? to : b.bookId, positions: moveBookKey(b.positions, from, to), agentPositions: moveBookKey(b.agentPositions, from, to) })
       }
       return { id: to }
+    }
+    // 重新排版: chapters may be fewer now, so readers' places are kept within the book.
+    case 'book-reparse': {
+      const result = await reparseBook(LIBRARY, payload.bookId)
+      const last = result.chapters - 1
+      const clamp = (v) => Number.isInteger(v) && v > last ? last : v
+      await rewriteBindings((b) => {
+        if (b?.bookId !== payload.bookId && b?.positions?.[payload.bookId] === undefined) return b
+        return {
+          ...b,
+          chapter: b.bookId === payload.bookId ? clamp(b.chapter) : b.chapter,
+          positions: b.positions ? { ...b.positions, [payload.bookId]: clamp(b.positions[payload.bookId]) } : b.positions,
+          agentPositions: b.agentPositions?.[payload.bookId] !== undefined ? { ...b.agentPositions, [payload.bookId]: clamp(b.agentPositions[payload.bookId]) } : b.agentPositions,
+        }
+      })
+      return result
     }
     // Before deleting: what goes with the books, and which reading sessions read them.
     case 'book-delete-preview': {

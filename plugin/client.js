@@ -737,6 +737,23 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       } catch (e) { failed(e); return null }
     }
 
+    /** 重新排版: split the book again from its original with the current rules; highlights are found again by their text. */
+    async function reparseBookFlow(app, book) {
+      if (!await askConfirm(`用最新的整理规则，从原文重新排一遍《${book.title}》：段落、分章可能会变。\n划线和笔记会按原文找回，分组和阅读对话不变；分章变了的话，已有的总结移到「总结/重新排版前」。`, { title: '重新排版', confirmText: '重新排版' })) return
+      try {
+        const r = await app.rpc('book-reparse', { bookId: book.id })
+        app.libraryChanged.bump()
+        app.marksChanged.bump()
+        app.store.loadAll()
+        tell([
+          `排好了：${r.before === r.chapters ? `还是 ${r.chapters} 节` : `${r.before} 节变成 ${r.chapters} 节`}。`,
+          r.highlights.found || r.highlights.lost ? `划线找回 ${r.highlights.found} 条${r.highlights.lost ? `，${r.highlights.lost} 条没找到原文，留在原处` : ''}。` : '',
+          r.summariesMoved ? `${r.summariesMoved} 篇总结移到了「总结/重新排版前」。` : '',
+          '正在读的页面刷新一下就是新排版。',
+        ].filter(Boolean).join('\n'))
+      } catch (e) { failed(e) }
+    }
+
     /**
      * 删除, like tavern's card library: say what goes with the books, then ask separately whether
      * their reading sessions go too (kept by default, as ordinary conversations). The books go to
@@ -851,6 +868,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       copy: 'M7.5 7.5h8.5v8.5H7.5zM4.5 12.5v-8h8',
       chat: 'M4 4.5h12v8.5H9.5L6 16v-3H4z',
       more: 'M5 10h.01M10 10h.01M15 10h.01',
+      refresh: 'M15.5 8A6 6 0 0 0 4.6 7M4.5 12a6 6 0 0 0 10.9 1M15.5 4v4h-4M4.5 16v-4h4',
       trash: 'M4 6h12M8 6V4.5h4V6M6 6l.7 10h6.6L14 6M8.5 9v4.5M11.5 9v4.5',
       check: 'M4.5 10.5 8 14l7.5-8',
       up: 'M5 12.5 10 7.5l5 5',
@@ -1245,6 +1263,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       // ⋯ on a card and on the book's page: rename, show the folder, delete.
       const bookMenu = (b) => [
         { label: '重命名', icon: 'pen', onClick: async () => { const id = await renameBookFlow(app, b); if (id && detail === b.id) setDetail(id) } },
+        { label: '重新排版', icon: 'refresh', onClick: () => reparseBookFlow(app, b) },
         { label: '在访达中显示', icon: 'folder', onClick: () => app.rpc('reveal', { bookId: b.id }).catch(failed) },
         { label: '删除', icon: 'trash', danger: true, onClick: async () => { if (await deleteBooksFlow(app, [b]) && detail === b.id) setDetail(null) } },
       ]
