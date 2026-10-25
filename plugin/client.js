@@ -912,6 +912,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             h('em', null, item.builtin ? (item.modified ? '内置 · 已修改' : '内置') : '我的'),
             usedBy(item.id).length ? h('span', { className: 'dr-ps-used' }, `在用：${usedBy(item.id).join('、')}`) : null),
           h('p', null, preview(item.text) || '（还没写内容）'))),
+        personas.hidden ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', style: { alignSelf: 'flex-start' }, onClick: () => app.rpc('persona', { action: 'unhide' }).then((view) => { replace(view); app.personasChanged.bump() }, failed) }, `恢复内置性格（${personas.hidden} 个已删除）`) : null,
         notice ? h('p', { className: 'dr-note' }, notice) : null)
     }
 
@@ -951,9 +952,10 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             const name = await askText({ title: '重命名性格', initialValue: persona.name, maxLength: 20, confirmText: '重命名' })
             if (name && name !== persona.name) manage({ action: 'rename', id: persona.id, name }, '已重命名。')
           } }, '重命名'),
-          persona.builtin ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', disabled: busy, onClick: async () => {
+          h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', disabled: busy, onClick: async () => {
             const note = used.length ? `\n${used.join('、')}会改回默认。` : ''
-            if (await askConfirm(`删除性格「${persona.name}」？删除后不能恢复。${note}`, { confirmText: '删除', danger: true })) manage({ action: 'delete', id: persona.id }, '', onBack)
+            const gone = persona.builtin ? '删除后不再出现，可以在总览底部「恢复内置性格」找回（改过的内容不保留）。' : '删除后不能恢复。'
+            if (await askConfirm(`删除性格「${persona.name}」？${gone}${note}`, { confirmText: '删除', danger: true })) manage({ action: 'delete', id: persona.id }, '', onBack)
           } }, '删除')),
         h('div', { className: 'dr-ps-label' }, '内容'),
         h('textarea', { value: text, disabled: busy, 'aria-label': '性格内容', onChange: (e) => { setDraft(e.target.value); setNotice('') } }),

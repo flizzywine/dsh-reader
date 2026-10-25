@@ -25,17 +25,20 @@ const NEW_PERSONA_TEXT = `# 你的身份
 
 /**
  * Settings shape: `{ activeId: '' | id, edits: { [id]: text }, custom: [{ id, name, text }],
- * groups: { [书库 group]: '' | id } }`; blank means no persona. activeId is the default; a group
- * listed in `groups` uses its own persona instead. Built-ins can be edited and restored; custom
- * ones are the user's own and can be renamed and deleted.
+ * groups: { [书库 group]: '' | id }, hidden: [built-in id] }`; blank means no persona. activeId is
+ * the default; a group listed in `groups` uses its own persona instead. Built-ins can be edited,
+ * restored and deleted (hidden, so they can be brought back); custom ones are the user's own and
+ * can be renamed and deleted for good.
  */
 export function personaView(settings) {
   const edits = settings.edits ?? {}
+  const hidden = settings.hidden ?? []
   return {
     activeId: settings.activeId ?? '',
     groups: settings.groups ?? {},
+    hidden: hidden.length,
     items: [
-      ...BUILTIN_PERSONAS.map((item) => ({
+      ...BUILTIN_PERSONAS.filter((item) => !hidden.includes(item.id)).map((item) => ({
         id: item.id,
         name: item.name,
         text: edits[item.id] ?? item.text,
@@ -67,13 +70,16 @@ function personaName(name) {
 }
 
 /**
- * Apply one `select | save | restore | create | copy | rename | delete | bind` action and return
- * the next settings. `create` and `copy` (of `id`) append a persona of the user's own, not chosen;
- * `bind` gives `group` persona `id` ('' blank), or back to the default when `id` is null.
+ * Apply one `select | save | restore | create | copy | rename | delete | bind | unhide` action and
+ * return the next settings. `create` and `copy` (of `id`) append a persona of the user's own, not
+ * chosen; `bind` gives `group` persona `id` ('' blank), or back to the default when `id` is null;
+ * `unhide` brings back every deleted built-in.
  */
 export function managePersona(settings, { action, id, text, name, group }) {
   const custom = settings.custom ?? []
-  const builtin = BUILTIN_PERSONAS.some((item) => item.id === id)
+  const hidden = settings.hidden ?? []
+  const builtin = BUILTIN_PERSONAS.some((item) => item.id === id) && !hidden.includes(id)
+  if (action === 'unhide') return { ...settings, hidden: [] }
   const own = custom.some((item) => item.id === id)
   if (action === 'create' || action === 'copy') {
     const source = action === 'copy' ? personaView(settings).items.find((item) => item.id === id) : null
@@ -95,10 +101,14 @@ export function managePersona(settings, { action, id, text, name, group }) {
   if (!builtin && !own) throw new Error(`unknown persona: ${id}`)
   if (action === 'save' && own) return { ...settings, custom: custom.map((item) => item.id === id ? { ...item, text: String(text ?? '') } : item) }
   if (action === 'rename' && own) return { ...settings, custom: custom.map((item) => item.id === id ? { ...item, name: personaName(name) } : item) }
-  if (action === 'delete' && own) {
-    // Groups that read with it go back to the default.
+  if (action === 'delete') {
+    // Groups that read with it go back to the default; a built-in is only hidden, its edits dropped.
     const groups = Object.fromEntries(Object.entries(settings.groups ?? {}).filter(([, value]) => value !== id))
-    return { ...settings, custom: custom.filter((item) => item.id !== id), groups, activeId: settings.activeId === id ? '' : settings.activeId }
+    const next = { ...settings, groups, activeId: settings.activeId === id ? '' : settings.activeId }
+    if (own) return { ...next, custom: custom.filter((item) => item.id !== id) }
+    const edits = { ...settings.edits }
+    delete edits[id]
+    return { ...next, edits, hidden: [...hidden, id] }
   }
   if (!builtin) throw new Error(`内置性格才能「${action}」`)
   const edits = { ...settings.edits }
