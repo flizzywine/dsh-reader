@@ -18,7 +18,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const { createPortal } = require('react-dom')
     const h = React.createElement
-    const { useState, useEffect, useRef, useSyncExternalStore } = React
+    const { useState, useEffect, useRef, useCallback, useSyncExternalStore } = React
 
     const ROUTE = '/api/dsh-reader'
     const CHAT_KIND = 'dsh-reader-chat'
@@ -327,6 +327,26 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 .dr-ask-ok{background:var(--dsw-alias-brand-primary);color:#fff}
 .dr-ask-ok:disabled{opacity:.45;cursor:default}
 .dr-ask-danger{background:#c0392b}
+.dr-stock{display:flex;flex-direction:column;gap:8px;margin:6px 0;padding:12px 14px;border:.5px solid var(--dsw-alias-border-l2);border-radius:12px;background:color-mix(in srgb,currentColor 3%,transparent);color:var(--dsw-alias-label-primary);font-size:13px}
+.dr-stock-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.dr-stock-head>div:first-child{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dr-stock-head>div:first-child b{font-size:15px}
+.dr-stock-head span{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
+.dr-stock-price{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:none}
+.dr-stock-price b{font-size:20px;font-variant-numeric:tabular-nums}
+.dr-stock-chart{width:100%}
+.dr-stock-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px}
+.dr-stock-tiles>div{display:flex;flex-direction:column;gap:2px;padding:7px 9px;border-radius:9px;background:color-mix(in srgb,currentColor 6%,transparent)}
+.dr-stock-tiles span{font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dr-stock-tiles b{font-size:15px;font-variant-numeric:tabular-nums}
+.dr-stock-basis,.dr-stock-foot{margin:0;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dr-stock-table{overflow-x:auto}
+.dr-stock-table table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.dr-stock-table th{font-weight:500;color:var(--dsw-alias-label-tertiary);text-align:right;padding:4px 6px;border-bottom:.5px solid var(--dsw-alias-border-l2)}
+.dr-stock-table td{text-align:right;padding:4px 6px;border-bottom:.5px solid color-mix(in srgb,var(--dsw-alias-border-l2) 50%,transparent)}
+.dr-stock-table :is(th,td){white-space:nowrap}
+.dr-stock-table :is(th,td):first-child{text-align:left}
+.dr-stock-line{font-size:12.5px;color:var(--dsw-alias-label-tertiary);padding:4px 0}
 .dr-persona{height:100%;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary)}
 .dr-persona textarea{flex:1;min-height:240px;resize:vertical;font:inherit;font-size:13px;line-height:1.6;color:inherit;background:var(--dsw-alias-bg-module-platform);border:none;border-radius:10px;padding:12px}
 .dr-persona-actions{display:flex;gap:8px;justify-content:flex-end}
@@ -1803,6 +1823,177 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      * Above the composer, like tavern's 生成候选项: send 继续总结下一章 in one click, and jump the
      * reader to the chapter the agent last read.
      */
+    // ---- Stock tools' cards (stock_chart, stock_fundamentals): the tool result's meta carries the data ----
+
+    const ECHARTS_URL = 'https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js'
+    let echartsLoading = null
+    /** ECharts from the CDN, loaded once on the first stock card. */
+    function loadEcharts() {
+      if (window.echarts) return Promise.resolve(window.echarts)
+      echartsLoading ??= new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = ECHARTS_URL
+        script.onload = () => resolve(window.echarts)
+        script.onerror = () => { echartsLoading = null; reject(new Error('图表库加载失败（需要能访问 cdn.jsdelivr.net）')) }
+        document.head.appendChild(script)
+      })
+      return echartsLoading
+    }
+
+    // Chinese market colours: red for up, green for down.
+    const UP = '#e5484d'
+    const DOWN = '#2f9e6b'
+    const fmtPct = (v) => v === null || v === undefined ? '—' : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%`
+    const fmtRatio = (v) => v === null || v === undefined ? '—' : v.toFixed(1)
+    function fmtMoney(v, currency = 'USD') {
+      if (v === null || v === undefined) return '—'
+      const unit = currency === 'USD' ? '$' : `${currency} `
+      const a = Math.abs(v)
+      const s = a >= 1e12 ? `${(a / 1e12).toFixed(2)}T` : a >= 1e9 ? `${(a / 1e9).toFixed(2)}B` : a >= 1e6 ? `${(a / 1e6).toFixed(1)}M` : a.toFixed(2)
+      return `${v < 0 ? '-' : ''}${unit}${s}`
+    }
+    const ymd = (t) => new Date(t).toISOString().slice(0, 10)
+
+    /** An ECharts chart in a div, themed from the page's own colours, resized with its box. */
+    function EChart({ option, height }) {
+      const ref = useRef(null)
+      const [error, setError] = useState(null)
+      useEffect(() => {
+        let chart = null
+        let observer = null
+        let live = true
+        loadEcharts().then((echarts) => {
+          if (!live || !ref.current) return
+          const style = getComputedStyle(ref.current)
+          chart = echarts.init(ref.current, null, { renderer: 'canvas' })
+          chart.setOption(option({ text: style.color, muted: style.getPropertyValue('--dsw-alias-label-tertiary').trim() || '#888', line: style.getPropertyValue('--dsw-alias-border-l2').trim() || '#8884' }))
+          observer = new ResizeObserver(() => chart?.resize())
+          observer.observe(ref.current)
+        }, (e) => live && setError(String(e?.message ?? e)))
+        return () => { live = false; observer?.disconnect(); chart?.dispose() }
+      }, [option])
+      return error ? h('p', { className: 'dr-error' }, error) : h('div', { ref, className: 'dr-stock-chart', style: { height } })
+    }
+
+    function movingAverage(closes, n) {
+      let sum = 0
+      return closes.map((c, i) => {
+        sum += c
+        if (i >= n) sum -= closes[i - n]
+        return i >= n - 1 ? +(sum / n).toFixed(2) : '-'
+      })
+    }
+
+    /** stock_chart: candles, volume and MA5/20/60, zoomable. */
+    function StockChartCard({ data }) {
+      const c = data.candles
+      const first = c[0]
+      const last = c.at(-1)
+      const change = last[4] / first[4] - 1
+      const option = useCallback((theme) => {
+        const dates = c.map((k) => ymd(k[0]))
+        const closes = c.map((k) => k[4])
+        const axis = { axisLine: { lineStyle: { color: theme.line } }, axisLabel: { color: theme.muted, fontSize: 10 }, splitLine: { lineStyle: { color: theme.line, opacity: 0.5 } } }
+        const ma = (n, color) => ({ name: `MA${n}`, type: 'line', data: movingAverage(closes, n), smooth: false, showSymbol: false, lineStyle: { width: 1, color }, itemStyle: { color } })
+        return {
+          animation: false,
+          legend: { top: 0, right: 8, itemWidth: 14, itemHeight: 2, textStyle: { color: theme.muted, fontSize: 10 }, data: ['MA5', 'MA20', 'MA60'] },
+          tooltip: {
+            trigger: 'axis', axisPointer: { type: 'cross' }, confine: true,
+            formatter: (items) => {
+              const i = items[0]?.dataIndex
+              if (i === undefined) return ''
+              const k = c[i]
+              const prev = c[i - 1]?.[4] ?? k[1]
+              return [`<b>${dates[i]}</b>`, `开 ${k[1]}　高 ${k[2]}`, `低 ${k[3]}　收 ${k[4]}`, `涨跌 ${fmtPct(k[4] / prev - 1)}`, `量 ${k[5].toLocaleString('en-US')}`].join('<br>')
+            },
+          },
+          axisPointer: { link: [{ xAxisIndex: 'all' }] },
+          grid: [{ left: 52, right: 12, top: 26, bottom: 96 }, { left: 52, right: 12, height: 44, bottom: 40 }],
+          xAxis: [
+            { type: 'category', data: dates, boundaryGap: true, ...axis, axisLabel: { show: false }, splitLine: { show: false } },
+            { type: 'category', gridIndex: 1, data: dates, boundaryGap: true, ...axis, splitLine: { show: false } },
+          ],
+          yAxis: [
+            { scale: true, ...axis, splitNumber: 4 },
+            { scale: true, gridIndex: 1, splitNumber: 1, axisLabel: { show: false }, axisLine: { show: false }, splitLine: { show: false } },
+          ],
+          dataZoom: [
+            { type: 'inside', xAxisIndex: [0, 1] },
+            { type: 'slider', xAxisIndex: [0, 1], bottom: 6, height: 18, borderColor: theme.line, textStyle: { color: theme.muted, fontSize: 10 } },
+          ],
+          series: [
+            { name: 'K', type: 'candlestick', data: c.map((k) => [k[1], k[4], k[3], k[2]]), itemStyle: { color: UP, color0: DOWN, borderColor: UP, borderColor0: DOWN } },
+            ma(5, '#d4a72c'), ma(20, '#4c8bf5'), ma(60, '#a56cc1'),
+            { name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: c.map((k) => ({ value: k[5], itemStyle: { color: k[4] >= k[1] ? UP : DOWN, opacity: 0.6 } })) },
+          ],
+        }
+      }, [c])
+      return h('div', { className: 'dr-stock' },
+        h('div', { className: 'dr-stock-head' },
+          h('div', null, h('b', null, data.name), h('span', null, `${data.symbol} · ${data.exchange} · ${data.range} ${data.interval === '1wk' ? '周K' : '日K'}`)),
+          h('div', { className: 'dr-stock-price' }, h('b', null, last[4]), h('span', { style: { color: change >= 0 ? UP : DOWN } }, `${fmtPct(change)}（区间）`))),
+        h(EChart, { option, height: 340 }),
+        h('p', { className: 'dr-stock-foot' }, `${ymd(first[0])} — ${ymd(last[0])} · ${data.currency} · 数据：${data.source ?? 'Yahoo Finance'}${data.stale ? ` · 数据源暂时取不到，这是 ${new Date(data.at).toLocaleString('zh-CN')} 的缓存` : ''}`))
+    }
+
+    /** stock_fundamentals: valuation tiles, revenue / profit bars with margin, and the period table. */
+    function StockFundamentalsCard({ data }) {
+      const v = data.valuation
+      const cur = data.currency
+      const label = (end) => data.period === 'quarter' ? end.slice(0, 7) : `FY${end.slice(0, 4)}`
+      const option = useCallback((theme) => {
+        const axis = { axisLine: { lineStyle: { color: theme.line } }, axisLabel: { color: theme.muted, fontSize: 10 }, splitLine: { lineStyle: { color: theme.line, opacity: 0.5 } } }
+        const margin = data.rows.map((r) => r.revenue && r.grossProfit !== null ? +(r.grossProfit / r.revenue * 100).toFixed(1) : null)
+        return {
+          animation: false,
+          legend: { top: 0, textStyle: { color: theme.muted, fontSize: 10 }, itemWidth: 10, itemHeight: 8 },
+          tooltip: { trigger: 'axis', confine: true, valueFormatter: (x) => typeof x === 'number' && Math.abs(x) > 1000 ? fmtMoney(x, cur) : x },
+          grid: { left: 56, right: 40, top: 28, bottom: 24 },
+          xAxis: { type: 'category', data: data.rows.map((r) => label(r.end)), ...axis, splitLine: { show: false } },
+          yAxis: [
+            { ...axis, axisLabel: { ...axis.axisLabel, formatter: (x) => fmtMoney(x, cur) } },
+            { ...axis, splitLine: { show: false }, axisLabel: { ...axis.axisLabel, formatter: '{value}%' } },
+          ],
+          series: [
+            { name: '营收', type: 'bar', data: data.rows.map((r) => r.revenue), itemStyle: { color: '#4c8bf5' }, barMaxWidth: 22 },
+            { name: '净利润', type: 'bar', data: data.rows.map((r) => r.netIncome), itemStyle: { color: '#d4a72c' }, barMaxWidth: 22 },
+            { name: '毛利率', type: 'line', yAxisIndex: 1, data: margin, itemStyle: { color: '#a56cc1' }, symbolSize: 5 },
+          ],
+        }
+      }, [data])
+      const tiles = [['PE', fmtRatio(v.pe)], ['PS', fmtRatio(v.ps)], ['PB', fmtRatio(v.pb)], ['FCF 收益率', fmtPct(v.fcfYield).replace('+', '')], ['毛利率', fmtPct(v.grossMargin).replace('+', '')], ['净利率', fmtPct(v.netMargin).replace('+', '')], ['营收同比', fmtPct(v.revenueGrowth)]]
+      return h('div', { className: 'dr-stock' },
+        h('div', { className: 'dr-stock-head' },
+          h('div', null, h('b', null, data.name), h('span', null, [data.symbol, data.exchange, data.sector, data.industry].filter(Boolean).join(' · '))),
+          h('div', { className: 'dr-stock-price' }, h('b', null, v.price ?? '—'), h('span', null, `市值 ${fmtMoney(v.marketCap, data.priceCurrency)}`))),
+        h('div', { className: 'dr-stock-tiles' }, tiles.map(([k, val]) => h('div', { key: k }, h('span', null, k), h('b', null, val)))),
+        h('p', { className: 'dr-stock-basis' }, `估值按 ${v.basis} 计算${cur !== data.priceCurrency ? `；报表货币 ${cur}，已按汇率换算` : ''}`),
+        h(EChart, { option, height: 220 }),
+        h('div', { className: 'dr-stock-table' }, h('table', null,
+          h('thead', null, h('tr', null, ['期末', '营收', '毛利率', '净利润', 'EPS', '自由现金流'].map((t) => h('th', { key: t }, t)))),
+          h('tbody', null, [...data.rows].reverse().map((r) => h('tr', { key: r.end },
+            h('td', null, label(r.end)), h('td', null, fmtMoney(r.revenue, cur)),
+            h('td', null, r.revenue && r.grossProfit !== null ? `${(r.grossProfit / r.revenue * 100).toFixed(1)}%` : '—'),
+            h('td', { style: { color: r.netIncome < 0 ? DOWN : undefined } }, fmtMoney(r.netIncome, cur)),
+            h('td', null, r.epsDiluted ?? '—'), h('td', { style: { color: r.freeCashFlow < 0 ? DOWN : undefined } }, fmtMoney(r.freeCashFlow, cur))))))),
+        h('p', { className: 'dr-stock-foot' }, `数据：${data.source === 'SEC EDGAR' ? 'SEC EDGAR（公司原始申报）' : 'Financial Modeling Prep'} · 报价 FMP · ${new Date(data.at).toLocaleString('zh-CN')}${data.stale ? ' · 数据源暂时取不到，用的是缓存' : ''} · — 表示没有这项数据`))
+    }
+
+    /** The tool row for both stock tools: a loading line while running, the card once the result has data. */
+    function StockToolView(props) {
+      const { phase, block, toolName } = props
+      let symbol = ''
+      try { symbol = JSON.parse(block.argsRaw ?? block.call?.argsRaw ?? '{}').symbol ?? '' } catch {}
+      const what = toolName === 'stock_chart' ? '行情' : '财务数据'
+      if (phase !== 'result') return h('div', { className: 'dr-stock-line' }, `正在取 ${String(symbol).toUpperCase()} 的${what}…`)
+      if (block.isError || !block.meta) {
+        const message = block.error?.message ?? block.content?.map((c) => c.text ?? '').join('').trim()
+        return h('div', { className: 'dr-stock-line dr-error' }, `${String(symbol).toUpperCase()} 的${what}没取到${message ? `：${message}` : ''}`)
+      }
+      return toolName === 'stock_chart' ? h(StockChartCard, { data: block.meta }) : h(StockFundamentalsCard, { data: block.meta })
+    }
+
     function AgentDock({ app, sessionId }) {
       const binding = useBinding(app.store, sessionId)
       if (!binding?.bookId) return null
@@ -1971,6 +2162,11 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
           name: 'conversation.input.dock', id: 'dsh-reader-agent-jump', order: -130, label: '继续总结、跳到 Agent 在读的章节',
         }, (props) => h(AgentDock, { app, sessionId: props.sessionId }))), 'dsh-reader: dock above composer')
+
+        // Stock tools draw their result as a card in the tool row (the result's meta carries the data).
+        for (const key of ['stock_chart', 'stock_fundamentals']) {
+          ctx.effect(() => ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({ name: 'tool.call.toolview', key }, StockToolView)), `dsh-reader: ${key} card`)
+        }
 
         ctx.effect(() => ctx.slots.inject(CHAT_SLOT, () => ctx.slots.register({ name: CHAT_SLOT }, ChatConversation)),
           'dsh-reader: chat conversation')

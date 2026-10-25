@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process'
 import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, setGroup, readGroups, createGroup, renameGroup, deleteGroup, BOOK_TYPES } from './books.js'
 import { managePersona, moveGroupPersona, personaFor, personaView } from './personas.js'
 import { readingTools } from './tools.js'
+import { stockTools } from './stocks.js'
 
 /** HTTP prefix the browser half posts to: `${ROUTE}/<endpoint>` with a JSON payload. */
 const ROUTE = '/api/dsh-reader'
@@ -362,7 +363,8 @@ export function apply(ctx) {
 
   // Tools are global (the tool list is part of the cached prefix); each one checks the session's book.
   ctx.inject(['tools'], (scope) => {
-    for (const tool of readingTools({ library: LIBRARY, bindingFor: async (sessionId) => (await readBindings())[sessionId] ?? null, updateBinding })) {
+    // Stock tools work in every session, with or without a book.
+    for (const tool of [...readingTools({ library: LIBRARY, bindingFor: async (sessionId) => (await readBindings())[sessionId] ?? null, updateBinding }), ...stockTools({ dataDir: DATA })]) {
       scope.effect(() => scope.tools.register(tool), `dsh-reader: ${tool.name} tool`)
     }
   })
