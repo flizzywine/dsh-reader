@@ -16,6 +16,7 @@
 //                                            `at` is the quote's offset in the chapter file; prefix/suffix
 //                                            (after W3C's TextQuoteSelector) find it again if the text moves.
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { basename, extname, join } from 'node:path'
 import { readEpub } from './epub.js'
 import { readPdf } from './pdf.js'
@@ -168,6 +169,46 @@ export async function migrateFlatBooks(library) {
     moved.set(name, id)
   }
   return moved
+}
+
+/**
+ * Rename a book: its folder (the book's id) and the title in 目录.json. Returns the new id; the
+ * caller moves the session bindings over.
+ */
+export async function renameBook(library, id, title) {
+  const toc = await readToc(library, id)
+  const name = String(title ?? '').replace(/\s+/g, ' ').trim()
+  const next = safeName(name)
+  if (next !== id) {
+    try { await stat(join(library, next)); throw new Error(`书库里已经有《${next}》了`) } catch (error) { if (error.code !== 'ENOENT') throw error }
+    await rename(join(library, safeName(id)), join(library, next))
+  }
+  await writeFile(join(library, next, TOC_FILE), JSON.stringify({ ...toc, title: name }, null, 2))
+  return next
+}
+
+/** What deleting a book takes with it: highlights, notes (on highlights and 随想) and summaries. */
+export async function bookContents(library, id) {
+  const highlights = await readHighlights(library, id)
+  const notes = (await readBookNotes(library, id)).length + highlights.filter((h) => h.note).length
+  return { highlights: highlights.length, notes, summaries: (await summarized(library, id)).size }
+}
+
+/**
+ * Delete a book by moving its folder to the Trash (macOS), or to library/.trash elsewhere, so the
+ * book and everything written on it can still be brought back.
+ */
+export async function trashBook(library, id) {
+  const dir = join(library, safeName(id))
+  await readToc(library, id)
+  const mac = join(homedir(), '.Trash')
+  let trash = mac
+  try { await stat(mac) } catch { trash = join(library, '.trash') }
+  await mkdir(trash, { recursive: true })
+  let target = join(trash, safeName(id))
+  try { await stat(target); target = `${target} ${new Date().toISOString().replace(/[:.]/g, '-')}` } catch { /* free */ }
+  await rename(dir, target)
+  return target
 }
 
 export async function listBooks(library) {

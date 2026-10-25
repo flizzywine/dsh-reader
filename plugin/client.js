@@ -310,6 +310,13 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 .dr-bb-list{display:flex;flex-direction:column;gap:10px}
 .dr-overlay-top{z-index:1100}
 .dr-gm{width:min(440px,100%)}
+.dr-more{flex:none}
+.dr-more .dr-gf-menu{left:auto;right:0;width:150px}
+.dr-more-btn{width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.dr-more-btn svg{stroke-width:3}
+.dr-more-btn:hover,.dr-more-btn[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dr-bd-title{display:flex;align-items:flex-start;gap:6px}
+.dr-bd-title h3{flex:1;min-width:0}
 .dr-gm-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dr-gm-row>span{flex:1;min-width:0;overflow-wrap:anywhere}
 .dr-bd-group{align-self:flex-start;max-width:100%}
@@ -508,7 +515,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      * the desktop app (Electron) has no window.prompt at all, and the browser's boxes look foreign.
      * `kind` 'text' resolves to the trimmed text or null; 'confirm' to true/false; 'tell' when closed.
      */
-    function ask(kind, { title, message = '', initialValue = '', placeholder = '', maxLength = 40, confirmText = '确定', danger = false } = {}) {
+    function ask(kind, { title, message = '', initialValue = '', placeholder = '', maxLength = 40, confirmText = '确定', cancelText = '取消', danger = false } = {}) {
       return new Promise((resolve) => {
         const dialog = document.createElement('dialog')
         dialog.className = 'dr-ask'
@@ -524,7 +531,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         const input = kind === 'text' ? Object.assign(make('input', 'dr-ask-input'), { type: 'text', value: initialValue, placeholder, maxLength, autocomplete: 'off', spellcheck: false }) : null
         if (input) dialog.append(input)
         const actions = make('div', 'dr-ask-actions')
-        const cancel = kind === 'tell' ? null : Object.assign(make('button', 'dr-btn dr-btn-line', '取消'), { type: 'button' })
+        const cancel = kind === 'tell' ? null : Object.assign(make('button', 'dr-btn dr-btn-line', cancelText), { type: 'button' })
         const ok = Object.assign(make('button', 'dr-btn dr-ask-ok' + (danger ? ' dr-ask-danger' : ''), kind === 'tell' ? '知道了' : confirmText), { type: 'button' })
         if (cancel) actions.append(cancel)
         actions.append(ok)
@@ -671,6 +678,9 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             groups.map((g) => h('option', { key: g, value: g }, g)),
             h('option', { value: UNGROUPED }, '未分组'),
             h('option', { value: '\u0000new' }, '新建分组…')),
+          h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', disabled: batch.size === 0, onClick: async () => {
+            if (await deleteBooksFlow(app, books.filter((b) => batch.has(b.id)))) setBatch(new Set())
+          } }, '删除'),
           h('button', { type: 'button', className: 'dr-btn', onClick: () => setBatch(null) }, '完成')) : null,
         h('div', { className: listClass }, shown.length === 0 ? h('p', { className: 'dr-note' }, q ? '没有书名匹配的书。' : '这个分组里还没有书。')
           : shown.map((b) => batch
@@ -699,6 +709,58 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             : h('button', { key: o.value, type: 'button', 'aria-pressed': value === o.value, onClick: () => { setOpen(false); if (o.value !== value) onPick(o.value) } },
               o.label, h('span', null, value === o.value ? '✓' : '')))),
           footer.length ? h('div', { className: 'dr-gf-footer' }, footer.map((f) => h('button', { key: f.label, type: 'button', onClick: () => { setOpen(false); f.run() } }, f.label))) : null) : null)
+    }
+
+    /** A ⋯ button opening a small menu: `items` [{ label, onClick, danger }]. */
+    function MoreMenu({ items, title = '更多' }) {
+      const ref = useRef(null)
+      const [open, setOpen] = useDropdown(ref)
+      return h('div', { ref, className: 'dr-gf dr-more' },
+        h('button', { type: 'button', className: 'dr-more-btn', title, 'aria-label': title, 'aria-expanded': open, onClick: (e) => { e.stopPropagation(); setOpen(!open) } }, h(Icon, { name: 'more', size: 16 })),
+        open ? h('div', { className: 'dr-gf-menu', role: 'menu' }, items.map((item) => h('button', {
+          key: item.label, type: 'button', className: item.danger ? 'dr-danger' : undefined,
+          onClick: (e) => { e.stopPropagation(); setOpen(false); item.onClick() },
+        }, item.label))) : null)
+    }
+
+    /** 重命名: the folder and the title; sessions reading it follow. Resolves to the new id, or null. */
+    async function renameBookFlow(app, book) {
+      const title = await askText({ title: '重命名', initialValue: book.title, maxLength: 80, confirmText: '重命名' })
+      if (!title || title === book.title) return null
+      try {
+        const { id } = await app.rpc('book-rename', { bookId: book.id, title })
+        app.libraryChanged.bump()
+        app.store.loadAll()
+        return id
+      } catch (e) { failed(e); return null }
+    }
+
+    /**
+     * 删除, like tavern's card library: say what goes with the books, then ask separately whether
+     * their reading sessions go too (kept by default, as ordinary conversations). The books go to
+     * the Trash. Resolves to true when deleted.
+     */
+    async function deleteBooksFlow(app, books) {
+      if (books.length === 0) return false
+      let preview
+      try { preview = await app.rpc('book-delete-preview', { bookIds: books.map((b) => b.id) }) } catch (e) { failed(e); return false }
+      const total = (k) => books.reduce((n, b) => n + (preview.contents[b.id]?.[k] ?? 0), 0)
+      const parts = [['highlights', '条划线'], ['notes', '条笔记'], ['summaries', '篇总结']].filter(([k]) => total(k)).map(([k, unit]) => `${total(k)} ${unit}`)
+      const names = books.slice(0, 10).map((b) => `• ${b.title}`).join('\n') + (books.length > 10 ? `\n……共 ${books.length} 本` : '')
+      const what = books.length === 1 ? `《${books[0].title}》` : `这 ${books.length} 本书`
+      const message = `${books.length > 1 ? `${names}\n\n` : ''}${parts.length ? `连同 ${parts.join('、')}，` : ''}${what}会移到废纸篓，需要时可以从废纸篓找回。`
+      if (!await askConfirm(message, { title: `删除${what}？`, confirmText: '删除', danger: true })) return false
+      const sessions = preview.sessions
+      const dropSessions = sessions.length > 0 && await askConfirm(`${what}还有 ${sessions.length} 个阅读对话，要一起删除吗？\n保留的话，它们变成普通对话，不再关联这本书。`, { title: '阅读对话', confirmText: '一起删除', cancelText: '保留对话', danger: true })
+      try {
+        await app.rpc('book-delete', { bookIds: books.map((b) => b.id) })
+        const failures = []
+        if (dropSessions) for (const { sessionId } of sessions) await app.archiveSession(sessionId).catch((e) => failures.push(String(e?.message ?? e)))
+        app.libraryChanged.bump()
+        app.store.loadAll()
+        if (failures.length) tell(`书已删除；${failures.length} 个阅读对话没删掉，可以在左侧历史里自己删：${failures[0]}`)
+        return true
+      } catch (e) { failed(e); return false }
     }
 
     /** 分组 chip on a book's page: 未分组, each group, 新建分组. */
@@ -786,6 +848,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       pen: 'M3.5 17h13M6 13.5l7.5-7.5 2 2-7.5 7.5H6z',
       copy: 'M7.5 7.5h8.5v8.5H7.5zM4.5 12.5v-8h8',
       chat: 'M4 4.5h12v8.5H9.5L6 16v-3H4z',
+      more: 'M5 10h.01M10 10h.01M15 10h.01',
       trash: 'M4 6h12M8 6V4.5h4V6M6 6l.7 10h6.6L14 6M8.5 9v4.5M11.5 9v4.5',
       check: 'M4.5 10.5 8 14l7.5-8',
       up: 'M5 12.5 10 7.5l5 5',
@@ -1073,7 +1136,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      * A book's page in 书库: its numbers and three tabs — 高亮 (every highlight), 笔记 (highlights the
      * user wrote a note on) and 总结 (the agent's summaries).
      */
-    function BookDetail({ app, book, groups, sessionId, binding, onBack, here, fresh }) {
+    function BookDetail({ app, book, groups, sessionId, binding, onBack, here, fresh, menu }) {
       const [summaries, setSummaries] = useState(null)
       const [marks, setMarks] = useState(null)
       const [toc, setToc] = useState(null)
@@ -1118,7 +1181,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return h('div', { className: 'dr-lib dr-bd' },
         h('button', { type: 'button', className: 'dr-back', onClick: onBack }, h(Icon, { name: 'left', size: 14 }), '书库'),
         h('header', { className: 'dr-bd-head' },
-          h('h3', null, book.title),
+          h('div', { className: 'dr-bd-title' }, h('h3', null, book.title), h(MoreMenu, { items: menu })),
           h('p', null, `${formatChars(book.chars)} · ${book.chapters} 节`),
           h(GroupSelect, { app, book, groups }),
           reading ? h('div', { className: 'dr-bd-progress' },
@@ -1174,7 +1237,13 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const here = (bookId) => run(app.store.bind(sessionId, { bookId }))
       const fresh = (bookId) => run(app.startReading(bookId))
       const shown = detail && books?.find((b) => b.id === detail)
-      if (shown) return h(BookDetail, { app, book: shown, groups, sessionId, binding, onBack: () => setDetail(null), here, fresh })
+      // ⋯ on a card and on the book's page: rename, show the folder, delete.
+      const bookMenu = (b) => [
+        { label: '重命名', onClick: async () => { const id = await renameBookFlow(app, b); if (id && detail === b.id) setDetail(id) } },
+        { label: '在访达中显示', onClick: () => app.rpc('reveal', { bookId: b.id }).catch(failed) },
+        { label: '删除', danger: true, onClick: async () => { if (await deleteBooksFlow(app, [b]) && detail === b.id) setDetail(null) } },
+      ]
+      if (shown) return h(BookDetail, { app, book: shown, groups, sessionId, binding, onBack: () => setDetail(null), here, fresh, menu: bookMenu(shown) })
       return h('div', { className: 'dr-lib' },
         h('div', { className: 'dr-lib-head' },
           h('div', null,
@@ -1190,7 +1259,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                   h('div', { className: 'dr-card-title' }, (b.id === current ? '✓ ' : '') + b.title),
                   h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`
                     + (b.id === current ? ` · 读到第 ${(binding.chapter ?? 0) + 1} 节` : ''))),
-                b.id === current ? h('span', { className: 'dr-note' }, '在读') : null) }))
+                b.id === current ? h('span', { className: 'dr-note' }, '在读') : null,
+                h(MoreMenu, { items: bookMenu(b) })) }))
     }
 
     const HEADING_LINE = /^(第[0-9零一二三四五六七八九十百千万两〇]+[章回节卷集部篇]|序章|序言|楔子|引子|尾声|后记|番外)/
@@ -2143,6 +2213,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           rpc,
           sessions: ctx.sessions,
           store: createBindingStore(rpc),
+          /** Archive a DSH session, as tavern does when a card's play history goes with the card. */
+          archiveSession: (sessionId) => ctx.workspaces.archiveSession(sessionId),
           libraryChanged: createSignal(),
           /** Any highlight or note changed from this page: the reader, its 笔记 tab and 书详情 all reload. */
           marksChanged: createSignal(),

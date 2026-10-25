@@ -5,7 +5,7 @@ import { dirname, join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, setGroup, readGroups, createGroup, renameGroup, deleteGroup, BOOK_TYPES } from './books.js'
+import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, setGroup, renameBook, bookContents, trashBook, readGroups, createGroup, renameGroup, deleteGroup, BOOK_TYPES } from './books.js'
 import { managePersona, moveGroupPersona, personaFor, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 import { RANGES, cleanSymbol, stockData, stockTools } from './stocks.js'
@@ -105,6 +105,38 @@ async function handleCall(endpoint, payload = {}) {
       return groups
     }
     // One book (bookId) or several (bookIds) into a group; '' takes them out.
+    case 'book-rename': {
+      const from = payload.bookId
+      const to = await renameBook(LIBRARY, from, payload.title)
+      if (to !== from) {
+        await rewriteBindings((b) => b?.bookId !== from && !b?.positions?.[from] && !b?.agentPositions?.[from] ? b
+          : { ...b, bookId: b.bookId === from ? to : b.bookId, positions: moveBookKey(b.positions, from, to), agentPositions: moveBookKey(b.agentPositions, from, to) })
+      }
+      return { id: to }
+    }
+    // Before deleting: what goes with the books, and which reading sessions read them.
+    case 'book-delete-preview': {
+      const ids = new Set(payload.bookIds ?? [])
+      const sessions = Object.entries(await readBindings()).filter(([, b]) => ids.has(b?.bookId)).map(([sessionId, b]) => ({ sessionId, bookId: b.bookId }))
+      const contents = {}
+      for (const id of ids) contents[id] = await bookContents(LIBRARY, id)
+      return { contents, sessions }
+    }
+    // The books go to the Trash; their sessions stay as ordinary conversations (the page archives them if asked).
+    case 'book-delete': {
+      const ids = new Set(payload.bookIds ?? [])
+      const trashed = []
+      for (const id of ids) trashed.push({ id, to: await trashBook(LIBRARY, id) })
+      await rewriteBindings((b) => {
+        if (ids.has(b?.bookId)) return null
+        let next = b
+        for (const id of ids) {
+          if (next?.positions?.[id] !== undefined || next?.agentPositions?.[id] !== undefined) next = { ...next, positions: moveBookKey(next.positions, id, null), agentPositions: moveBookKey(next.agentPositions, id, null) }
+        }
+        return next
+      })
+      return { trashed }
+    }
     case 'book-group':
       return setGroup(LIBRARY, payload.bookIds ?? [payload.bookId], payload.group)
     case 'toc': {
@@ -256,6 +288,35 @@ const versions = new Map()
 
 /** The one writer of bindings: the page, the agent's show_passage, and closing a book all go through here. */
 let writing = Promise.resolve()
+
+/**
+ * Rewrite every binding through the same writer: `change(binding)` returns the new binding, or
+ * null to drop it. Used when a book is renamed (its id moves) or deleted.
+ */
+function rewriteBindings(change) {
+  const work = writing.then(async () => {
+    const all = await readBindings()
+    for (const [sessionId, binding] of Object.entries(all)) {
+      const next = change(binding)
+      if (next === binding) continue
+      if (next === null) delete all[sessionId]
+      else all[sessionId] = next
+      versions.set(sessionId, (versions.get(sessionId) ?? 0) + 1)
+    }
+    await writeJsonFile(BINDINGS, all)
+  })
+  writing = work.catch(() => {})
+  return work
+}
+
+/** A book's id in a binding's per-book maps, renamed (`to`) or dropped (null). */
+function moveBookKey(map, from, to) {
+  if (!map || !(from in map)) return map
+  const next = { ...map }
+  if (to) next[to] = next[from]
+  delete next[from]
+  return next
+}
 function updateBinding(sessionId, patch) {
   const work = writing.then(async () => {
     const all = await readBindings()
