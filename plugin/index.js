@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, setGroup, readGroups, createGroup, renameGroup, deleteGroup, BOOK_TYPES } from './books.js'
-import { activePersonaText, managePersona, personaView } from './personas.js'
+import { managePersona, moveGroupPersona, personaFor, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 
 /** HTTP prefix the browser half posts to: `${ROUTE}/<endpoint>` with a JSON payload. */
@@ -64,6 +64,14 @@ function migrateLibrary() {
   return migration
 }
 
+/** Change the 工作台性格 part of data/settings.json; returns the new part. */
+async function updatePersonaSettings(change) {
+  const settings = await readJsonFile(SETTINGS)
+  settings.persona = change(settings.persona ?? {})
+  await writeJsonFile(SETTINGS, settings)
+  return settings.persona
+}
+
 async function handleCall(endpoint, payload = {}) {
   switch (endpoint) {
     case 'info':
@@ -75,10 +83,17 @@ async function handleCall(endpoint, payload = {}) {
       return readGroups(LIBRARY)
     case 'group-create':
       return createGroup(LIBRARY, payload.name)
-    case 'group-rename':
-      return renameGroup(LIBRARY, payload.from, payload.to)
-    case 'group-delete':
-      return deleteGroup(LIBRARY, payload.name)
+    // A group's bound persona (in settings) follows it when renamed and goes when it is deleted.
+    case 'group-rename': {
+      const groups = await renameGroup(LIBRARY, payload.from, payload.to)
+      await updatePersonaSettings((persona) => moveGroupPersona(persona, payload.from, String(payload.to).replace(/\s+/g, ' ').trim()))
+      return groups
+    }
+    case 'group-delete': {
+      const groups = await deleteGroup(LIBRARY, payload.name)
+      await updatePersonaSettings((persona) => moveGroupPersona(persona, payload.name, null))
+      return groups
+    }
     // One book (bookId) or several (bookIds) into a group; '' takes them out.
     case 'book-group':
       return setGroup(LIBRARY, payload.bookIds ?? [payload.bookId], payload.group)
@@ -166,12 +181,8 @@ async function handleCall(endpoint, payload = {}) {
       return watchBinding(payload.sessionId, payload.version)
     case 'personas':
       return personaView((await readJsonFile(SETTINGS)).persona ?? {})
-    case 'persona': {
-      const settings = await readJsonFile(SETTINGS)
-      settings.persona = managePersona(settings.persona ?? {}, payload)
-      await writeJsonFile(SETTINGS, settings)
-      return personaView(settings.persona)
-    }
+    case 'persona':
+      return personaView(await updatePersonaSettings((persona) => managePersona(persona, payload)))
     default:
       throw new Error(`unknown endpoint: ${endpoint}`)
   }
@@ -362,13 +373,16 @@ export function apply(ctx) {
     }
   })
 
-  // Reading sessions get the chosen 工作台性格 and the book they read; other sessions are untouched.
+  // Reading sessions get their 工作台性格 (the book group's, else the default) and the book they read;
+  // other sessions are untouched.
   ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
     const assembly = await next()
     const sessionId = context?.agent?.session?.id
     const binding = sessionId === undefined ? undefined : (await readBindings())[sessionId]
     if (!binding?.bookId) return assembly
-    const persona = activePersonaText((await readJsonFile(SETTINGS)).persona ?? {})
+    // The book's 书库 group may bring its own persona instead of the default.
+    const group = await readToc(LIBRARY, binding.bookId).then((toc) => toc.group, () => undefined)
+    const persona = personaFor((await readJsonFile(SETTINGS)).persona ?? {}, group).item?.text ?? ''
     // Like tavern's card mode, a chosen persona replaces DSH's own identity; tool sections stay.
     const inherited = (assembly.sections ?? []).filter((section) => !persona || !REPLACED_BY_PERSONA.has(section.name))
     assembly.sections = [

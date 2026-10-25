@@ -308,10 +308,14 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 .dr-gm-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dr-gm-row>span{flex:1;min-width:0;overflow-wrap:anywhere}
 .dr-bd-group{align-self:flex-start;max-width:100%}
-.dr-bd-group-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;height:26px;box-sizing:border-box;padding:0 9px 0 8px;border:0;border-radius:999px;background:color-mix(in srgb,currentColor 7%,transparent);color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;cursor:pointer}
-.dr-bd-group-chip:hover,.dr-bd-group-chip[aria-expanded="true"]{background:color-mix(in srgb,currentColor 12%,transparent);color:var(--dsw-alias-label-primary)}
-.dr-bd-group-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dr-bd-group-chip svg{flex:none;opacity:.7}
+.dr-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;height:26px;box-sizing:border-box;padding:0 9px 0 8px;border:0;border-radius:999px;background:color-mix(in srgb,currentColor 7%,transparent);color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;cursor:pointer}
+.dr-chip:hover,.dr-chip[aria-expanded="true"]{background:color-mix(in srgb,currentColor 12%,transparent);color:var(--dsw-alias-label-primary)}
+.dr-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dr-chip svg{flex:none;opacity:.7}
+.dr-gm-row .dr-chip-menu{flex:none}
+.dr-gm-row .dr-gf-menu{left:auto;right:0}
+.dr-gf-heading{padding:6px 10px 2px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dr-persona-row small{font-size:11px;padding:1px 6px;border-radius:999px;background:color-mix(in srgb,currentColor 8%,transparent)}
 .dr-error{color:#e5484d;font-size:12px;margin:0}
 .dr-persona{height:100%;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary)}
 .dr-persona textarea{flex:1;min-height:240px;resize:vertical;font:inherit;font-size:13px;line-height:1.6;color:inherit;background:var(--dsw-alias-bg-module-platform);border:none;border-radius:10px;padding:12px}
@@ -488,13 +492,16 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             h('button', { type: 'button', onClick: () => { setOpen(false); onManage() } }, '管理分组'))) : null)
     }
 
-    /** 管理分组 dialog: rename or delete each group, add one, or go sort books in bulk. */
+    /** 管理分组 dialog: each group's 工作台性格, rename or delete it, add one, or go sort books in bulk. */
     function GroupManager({ app, groups, onClose, onBatch }) {
+      const personas = usePersonas(app)
       return createPortal(h('div', { className: 'dr-overlay dr-overlay-top', onPointerDown: (e) => { if (e.target === e.currentTarget) onClose() } },
         h('div', { className: 'dr-dialog dr-gm', role: 'dialog', 'aria-label': '管理分组' },
           h('div', { className: 'dr-dialog-head' }, h('h3', null, '管理分组'), h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '关闭')),
+          h('p', { className: 'dr-note' }, '每个分组可以绑定自己的工作台性格，组里的书读起来就用它；不绑定就跟随默认性格。'),
           groups.length === 0 ? h('p', { className: 'dr-note' }, '还没有分组。') : groups.map((g) => h('div', { key: g, className: 'dr-gm-row' },
             h('span', null, g),
+            h(GroupPersona, { app, group: g, personas }),
             h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => {
               const to = askGroupName(g)
               if (to && to !== g) libraryWork(app, app.rpc('group-rename', { from: g, to }))
@@ -563,28 +570,56 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         managing ? h(GroupManager, { app, groups, onClose: () => setManaging(false), onBatch: () => setBatch(new Set()) }) : null)
     }
 
-    /** 分组 chip on a book's page, opening the same menu as the 书库 filter: 未分组, each group, 新建分组. */
-    function GroupSelect({ app, book, groups }) {
+    /**
+     * A small chip that opens a menu like the 分组 filter's: `options` [{ value, label }] with ✓ on
+     * `value`, then `footer` actions [{ label, run }] under a line.
+     */
+    function ChipMenu({ icon, label, title, options, value, onPick, footer = [], className = '' }) {
       const ref = useRef(null)
       const [open, setOpen] = useDropdown(ref)
-      const current = book.group ?? ''
-      const pick = (group) => {
-        setOpen(false)
-        if (group !== current) libraryWork(app, app.rpc('book-group', { bookId: book.id, group }))
-      }
-      const option = (group, label) => h('button', { key: group || '\u0000none', type: 'button', 'aria-pressed': current === group, onClick: () => pick(group) },
-        label, h('span', null, current === group ? '✓' : ''))
-      return h('div', { ref, className: 'dr-gf dr-bd-group' },
-        h('button', { type: 'button', className: 'dr-bd-group-chip', 'aria-expanded': open, title: '书库分组', onClick: () => setOpen(!open) },
-          h(Icon, { name: 'folder', size: 13 }), h('span', null, current || '未分组'), h(Icon, { name: open ? 'up' : 'down', size: 12 })),
+      return h('div', { ref, className: 'dr-gf dr-chip-menu ' + className },
+        h('button', { type: 'button', className: 'dr-chip', 'aria-expanded': open, title, onClick: () => setOpen(!open) },
+          icon ? h(Icon, { name: icon, size: 13 }) : null, h('span', null, label), h(Icon, { name: open ? 'up' : 'down', size: 12 })),
         open ? h('div', { className: 'dr-gf-menu', role: 'menu' },
-          h('div', { className: 'dr-gf-options' }, option('', '未分组'), groups.map((g) => option(g, g))),
-          h('div', { className: 'dr-gf-footer' },
-            h('button', { type: 'button', onClick: () => {
-              setOpen(false)
-              const name = askGroupName()
-              if (name) libraryWork(app, app.rpc('book-group', { bookId: book.id, group: name }))
-            } }, '＋ 新建分组'))) : null)
+          h('div', { className: 'dr-gf-options' }, options.map((o) => o.heading
+            ? h('div', { key: o.heading, className: 'dr-gf-heading' }, o.heading)
+            : h('button', { key: o.value, type: 'button', 'aria-pressed': value === o.value, onClick: () => { setOpen(false); if (o.value !== value) onPick(o.value) } },
+              o.label, h('span', null, value === o.value ? '✓' : '')))),
+          footer.length ? h('div', { className: 'dr-gf-footer' }, footer.map((f) => h('button', { key: f.label, type: 'button', onClick: () => { setOpen(false); f.run() } }, f.label))) : null) : null)
+    }
+
+    /** 分组 chip on a book's page: 未分组, each group, 新建分组. */
+    function GroupSelect({ app, book, groups }) {
+      const move = (group) => libraryWork(app, app.rpc('book-group', { bookId: book.id, group }))
+      return h(ChipMenu, {
+        className: 'dr-bd-group', icon: 'folder', label: book.group || '未分组', title: '书库分组', value: book.group ?? '',
+        options: [{ value: '', label: '未分组' }, ...groups.map((g) => ({ value: g, label: g }))],
+        onPick: move,
+        footer: [{ label: '＋ 新建分组', run: () => { const name = askGroupName(); if (name) move(name) } }],
+      })
+    }
+
+    const FOLLOW_DEFAULT = '\u0000default'
+
+    /** 性格 chip on a 管理分组 row: follow the default, blank, or a persona of the group's own. */
+    function GroupPersona({ app, group, personas }) {
+      if (!personas) return null
+      const bound = personas.groups[group]
+      const value = bound === undefined ? FOLLOW_DEFAULT : bound
+      const name = (id) => id === '' ? '空白' : personas.items.find((item) => item.id === id)?.name
+      const options = [
+        { value: FOLLOW_DEFAULT, label: `跟随默认（${name(personas.activeId) ?? '空白'}）` },
+        { value: '', label: '空白（不带性格）' },
+        { heading: '内置' }, ...personas.items.filter((item) => item.builtin).map((item) => ({ value: item.id, label: item.name })),
+        ...(personas.items.some((item) => !item.builtin) ? [{ heading: '我的' }, ...personas.items.filter((item) => !item.builtin).map((item) => ({ value: item.id, label: item.name }))] : []),
+      ]
+      return h(ChipMenu, {
+        icon: 'persona', title: '这个分组的书用哪个工作台性格', value,
+        label: value === FOLLOW_DEFAULT ? '跟随默认' : name(value) ?? '跟随默认',
+        options,
+        onPick: (id) => app.rpc('persona', { action: 'bind', group, id: id === FOLLOW_DEFAULT ? null : id })
+          .then(() => app.personasChanged.bump(), (e) => window.alert(String(e?.message ?? e))),
+      })
     }
 
     /**
@@ -630,6 +665,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       close: 'M5 5l10 10M15 5 5 15',
       note: 'M5 3.5h7l3 3v10H5zM8 9.5h4M8 12.5h4',
       locate: 'M10 3v3M10 14v3M3 10h3M14 10h3M10 7a3 3 0 1 1 0 6 3 3 0 0 1 0-6z',
+      persona: 'M10 9.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 17c.6-3.2 3-5 6-5s5.4 1.8 6 5',
       folder: 'M3 6V5a1.5 1.5 0 0 1 1.5-1.5H8l2 2h5.5A1.5 1.5 0 0 1 17 7v7.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 14.5z',
       pen: 'M3.5 17h13M6 13.5l7.5-7.5 2 2-7.5 7.5H6z',
       copy: 'M7.5 7.5h8.5v8.5H7.5zM4.5 12.5v-8h8',
@@ -680,7 +716,11 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         next.has(bookId) ? next.delete(bookId) : next.add(bookId)
         return next
       })
-      const activePersona = persona?.items.find((item) => item.id === persona.activeId)
+      // The persona the open book reads with: its group's own, else the default.
+      const openBook = books?.find((b) => b.id === app.store.get(current)?.bookId)
+      const bound = openBook?.group ? persona?.groups[openBook.group] : undefined
+      const fromGroup = bound !== undefined && (bound === '' || persona?.items.some((item) => item.id === bound))
+      const activePersona = persona?.items.find((item) => item.id === (fromGroup ? bound : persona.activeId))
 
       const total = ordered.reduce((n, group) => n + group.items.length, 0)
 
@@ -701,8 +741,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             onClick: () => app.openSession(sessionId),
           }, h('span', { className: 'dr-entry-title' }, row.title ?? '新的阅读'),
           h('small', null, [`第 ${(binding.chapter ?? 0) + 1} 节`, formatTime(binding.updatedAt)].filter(Boolean).join(' · '))))))),
-        h('div', { className: 'dr-persona-row', onClick: () => app.openPersona(current), title: '切换工作台性格' },
-          h('span', null, '工作台性格'), h('b', null, activePersona?.name ?? '空白')),
+        h('div', { className: 'dr-persona-row', onClick: () => app.openPersona(current), title: fromGroup ? `这本书在「${openBook.group}」分组，用分组绑定的性格；在书库「管理分组」里改` : '切换默认工作台性格' },
+          h('span', null, '工作台性格'), h('b', null, activePersona?.name ?? '空白'), fromGroup ? h('small', null, openBook.group) : null),
         picking ? h(BookPicker, { app, onClose: () => setPicking(false), onLibrary: () => app.openLibrary(current) }) : null)
     }
 
@@ -737,7 +777,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return h('div', { className: 'dr-persona' },
         h('div', { className: 'dr-lib-head' }, h('div', null,
           h('h3', null, '工作台性格'),
-          h('p', null, '陪读 Agent 的性格，对所有阅读对话生效，从下一次请求开始。'))),
+          h('p', null, '这里选的是默认性格。分组可以在书库「管理分组」里绑定自己的性格，组里的书就用它。改动从下一次请求开始生效。'))),
         h('select', {
           value: view.activeId, disabled: busy,
           onChange: (e) => manage({ action: 'select', id: e.target.value }, e.target.value ? '已切换性格。' : '已切换为空白。'),

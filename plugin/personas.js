@@ -24,14 +24,16 @@ const NEW_PERSONA_TEXT = `# 你的身份
 - 不要做的事：`
 
 /**
- * Settings shape: `{ activeId: '' | id, edits: { [id]: text }, custom: [{ id, name, text }] }`;
- * blank activeId means no persona. Built-ins can be edited and restored; custom ones are the user's
- * own and can be renamed and deleted.
+ * Settings shape: `{ activeId: '' | id, edits: { [id]: text }, custom: [{ id, name, text }],
+ * groups: { [书库 group]: '' | id } }`; blank means no persona. activeId is the default; a group
+ * listed in `groups` uses its own persona instead. Built-ins can be edited and restored; custom
+ * ones are the user's own and can be renamed and deleted.
  */
 export function personaView(settings) {
   const edits = settings.edits ?? {}
   return {
     activeId: settings.activeId ?? '',
+    groups: settings.groups ?? {},
     items: [
       ...BUILTIN_PERSONAS.map((item) => ({
         id: item.id,
@@ -45,9 +47,16 @@ export function personaView(settings) {
   }
 }
 
-export function activePersonaText(settings) {
+/**
+ * The persona a book in `group` reads with: the group's own if it has one that still exists,
+ * else the default. `{ item, group }`: item null for blank, group set when the group decided.
+ */
+export function personaFor(settings, group) {
   const view = personaView(settings)
-  return view.items.find((item) => item.id === view.activeId)?.text ?? ''
+  const find = (id) => view.items.find((item) => item.id === id) ?? null
+  const own = group ? view.groups[group] : undefined
+  if (own !== undefined && (own === '' || find(own))) return { item: find(own), group }
+  return { item: find(view.activeId), group: null }
 }
 
 function personaName(name) {
@@ -58,16 +67,24 @@ function personaName(name) {
 }
 
 /**
- * Apply one `select | save | restore | create | rename | delete` action and return the next
- * settings. `create` also selects the new persona.
+ * Apply one `select | save | restore | create | rename | delete | bind` action and return the next
+ * settings. `create` also selects the new persona; `bind` gives `group` persona `id` ('' blank),
+ * or back to the default when `id` is null.
  */
-export function managePersona(settings, { action, id, text, name }) {
+export function managePersona(settings, { action, id, text, name, group }) {
   const custom = settings.custom ?? []
   const builtin = BUILTIN_PERSONAS.some((item) => item.id === id)
   const own = custom.some((item) => item.id === id)
   if (action === 'create') {
     const item = { id: `c${Date.now().toString(36)}`, name: personaName(name), text: String(text ?? NEW_PERSONA_TEXT) }
     return { ...settings, custom: [...custom, item], activeId: item.id }
+  }
+  if (action === 'bind') {
+    const groups = { ...settings.groups }
+    if (id === null || id === undefined) delete groups[group]
+    else if (id === '' || builtin || own) groups[group] = id
+    else throw new Error(`unknown persona: ${id}`)
+    return { ...settings, groups }
   }
   if (action === 'select') {
     if (id !== '' && !builtin && !own) throw new Error(`unknown persona: ${id}`)
@@ -76,11 +93,24 @@ export function managePersona(settings, { action, id, text, name }) {
   if (!builtin && !own) throw new Error(`unknown persona: ${id}`)
   if (action === 'save' && own) return { ...settings, custom: custom.map((item) => item.id === id ? { ...item, text: String(text ?? '') } : item) }
   if (action === 'rename' && own) return { ...settings, custom: custom.map((item) => item.id === id ? { ...item, name: personaName(name) } : item) }
-  if (action === 'delete' && own) return { ...settings, custom: custom.filter((item) => item.id !== id), activeId: settings.activeId === id ? '' : settings.activeId }
+  if (action === 'delete' && own) {
+    // Groups that read with it go back to the default.
+    const groups = Object.fromEntries(Object.entries(settings.groups ?? {}).filter(([, value]) => value !== id))
+    return { ...settings, custom: custom.filter((item) => item.id !== id), groups, activeId: settings.activeId === id ? '' : settings.activeId }
+  }
   if (!builtin) throw new Error(`内置性格才能「${action}」`)
   const edits = { ...settings.edits }
   if (action === 'save') edits[id] = String(text ?? '')
   else if (action === 'restore') delete edits[id]
   else throw new Error(`unknown action: ${action}`)
   return { ...settings, edits }
+}
+
+/** Follow a 书库 group's rename (to a name) or deletion (to null). */
+export function moveGroupPersona(settings, from, to) {
+  const groups = { ...settings.groups }
+  if (!(from in groups)) return settings
+  if (to) groups[to] = groups[from]
+  delete groups[from]
+  return { ...settings, groups }
 }
