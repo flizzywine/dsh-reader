@@ -9,6 +9,7 @@ import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readH
 import { managePersona, moveGroupPersona, personaFor, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 import { RANGES, cleanSymbol, stockData, stockTools } from './stocks.js'
+import { secTools } from './sec.js'
 
 /** HTTP prefix the browser half posts to: `${ROUTE}/<endpoint>` with a JSON payload. */
 const ROUTE = '/api/dsh-reader'
@@ -449,8 +450,8 @@ export function apply(ctx) {
 
   // Tools are global (the tool list is part of the cached prefix); each one checks the session's book.
   ctx.inject(['tools'], (scope) => {
-    // Stock tools work in every session, with or without a book.
-    for (const tool of [...readingTools({ library: LIBRARY, bindingFor: async (sessionId) => (await readBindings())[sessionId] ?? null, updateBinding }), ...stockTools({ data: STOCKS })]) {
+    // Stock and SEC tools work in every session, with or without a book.
+    for (const tool of [...readingTools({ library: LIBRARY, bindingFor: async (sessionId) => (await readBindings())[sessionId] ?? null, updateBinding }), ...stockTools({ data: STOCKS }), ...secTools({ dataDir: DATA, cikOf: (symbol) => STOCKS.cik(symbol) })]) {
       scope.effect(() => scope.tools.register(tool), `dsh-reader: ${tool.name} tool`)
     }
   })

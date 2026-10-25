@@ -322,6 +322,11 @@ export function stockData({ dataDir }) {
   }
 
   return {
+    /** The company's SEC number from FMP's profile, or null. */
+    async cik(symbol) {
+      return (await profile(symbol).catch(() => null))?.cik ?? null
+    },
+
     async chart(symbol, range) {
       // Yahoo first; it is unofficial and rate-limits without warning, so then Nasdaq, then FMP.
       const result = await cached(`chart-${symbol}-${range}`, 4 * HOUR, () => yahooChart(symbol, range)
