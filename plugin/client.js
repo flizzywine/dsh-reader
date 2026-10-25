@@ -400,6 +400,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     function ImportButton({ app, className, label = '导入新书', onImported }) {
       const input = useRef(null)
       const [busy, setBusy] = useState(false)
+      const [progress, setProgress] = useState(null)
       const [error, setError] = useState(null)
       async function pick(event) {
         const files = [...event.target.files]
@@ -409,13 +410,13 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         setError(null)
         try {
           let last
-          for (const file of files) last = await app.importFile(file)
+          for (const file of files) last = await app.importFile(file, setProgress)
           onImported?.(last)
-        } catch (e) { setError(String(e?.message ?? e)) } finally { setBusy(false) }
+        } catch (e) { setError(String(e?.message ?? e)) } finally { setBusy(false); setProgress(null) }
       }
       return h(React.Fragment, null,
         h('input', { ref: input, type: 'file', accept: '.txt,.epub,.pdf,text/plain,application/epub+zip,application/pdf', multiple: true, hidden: true, onChange: pick }),
-        h('button', { type: 'button', className: className ?? 'dr-btn', disabled: busy, onClick: () => input.current?.click() }, busy ? '导入中…' : label),
+        h('button', { type: 'button', className: className ?? 'dr-btn', disabled: busy, onClick: () => input.current?.click() }, busy ? (progress?.total ? `识别文字 ${progress.done}/${progress.total} 页…` : '导入中…') : label),
         error ? h('p', { className: 'dr-error' }, error) : null)
     }
 
@@ -1525,15 +1526,24 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             app.openSession(sessionId)
             return sessionId
           },
-          async importFile(file) {
+          /** Upload a book, then follow the import job; `onProgress({ done, total })` while a scan is recognised. */
+          async importFile(file, onProgress) {
             const res = await fetch(`${ROUTE}/import?name=${encodeURIComponent(file.name)}`, {
               method: 'POST', credentials: 'same-origin',
               headers: { 'content-type': 'application/octet-stream' }, body: file,
             })
             const body = await res.json()
             if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
-            app.libraryChanged.bump()
-            return body.result
+            for (;;) {
+              const job = await rpc('import-status', { job: body.result.job })
+              if (job.error) throw new Error(job.error)
+              if (job.result) {
+                app.libraryChanged.bump()
+                return job.result
+              }
+              onProgress?.(job)
+              await new Promise((resolve) => setTimeout(resolve, 1000))
+            }
           },
         }
 

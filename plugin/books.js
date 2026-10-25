@@ -102,10 +102,11 @@ export const BOOK_TYPES = ['.txt', '.epub', '.pdf']
 /**
  * Read an imported file into `{ title, text, parts, source }`: `title` is the book's own
  * (EPUB/PDF metadata) or null, `source` the file name the original is kept under.
+ * `onProgress(done, total)` reports pages recognised in a scanned PDF.
  */
-export async function parseBook(ext, buffer) {
+export async function parseBook(ext, buffer, { onProgress } = {}) {
   if (ext === '.pdf') {
-    const { title, text, marks, headings } = await readPdf(buffer)
+    const { title, text, marks, headings } = await readPdf(buffer, { onProgress })
     return { title, text, parts: marks.length > 1 ? cutAtMarks(text, marks) : splitBook(text, headings), source: SOURCE_PDF }
   }
   if (ext === '.epub') {

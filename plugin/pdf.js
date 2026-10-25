@@ -5,12 +5,16 @@
 // a paragraph. Page numbers and lines repeated on many pages (running heads, watermarks) are
 // dropped. The bookmarks give chapter marks when they look like a real contents list; short
 // lines set large, centred or listed in the printed contents are offered as headings for when neither bookmarks nor 第X章 exist.
-// Scanned PDFs have no text layer; those need OCR and are refused.
+// A scanned PDF has no text layer; its pages are read by macOS's text recognition (ocr.swift),
+// which gives positioned lines too, so the same rules apply.
 
-import { execFile } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { execFile, spawn } from 'node:child_process'
+import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { createInterface } from 'node:readline'
+import { fileURLToPath } from 'node:url'
 import { decodeEntities } from './epub.js'
 
 const run = (cmd, args) => new Promise((resolve, reject) => {
@@ -93,10 +97,11 @@ function margins(pages) {
  * of `line` would not have fit at the end of `prev` (so the typesetter wrapped it), the new line
  * is not indented, and there is no gap or change of type size between them.
  */
-function continues(prev, prevEdge, line, edge, samePage) {
+function continues(prev, prevEdge, line, edge, samePage, ocr) {
   const size = line.y1 - line.y0
   const prevSize = prev.y1 - prev.y0
-  if (Math.abs(size - prevSize) > prevSize * 0.15) return false
+  // Recognised line boxes vary in height with the letters on them, so OCR gives no type size.
+  if (!ocr && Math.abs(size - prevSize) > prevSize * 0.15) return false
   // A contents line: dot leaders running to the page number at the right edge.
   if (/[.…·．]{4,}\s*\d+$/.test(prev.text)) return false
   if (line.x0 > edge.left + size * 0.8) return false
@@ -106,13 +111,13 @@ function continues(prev, prevEdge, line, edge, samePage) {
 }
 
 /** All pages as paragraphs `[{ text, page, size, lines }]`, paragraphs running across page breaks joined. */
-function paragraphs(pages) {
+function paragraphs(pages, ocr) {
   const edges = margins(pages)
   const out = []
   let prev = null
   for (const [i, page] of pages.entries()) {
     for (const line of page.lines) {
-      if (prev && continues(prev.line, edges.get(prev.line), line, edges.get(line), prev.page === i)) {
+      if (prev && continues(prev.line, edges.get(prev.line), line, edges.get(line), prev.page === i, ocr)) {
         const last = out.at(-1)
         last.text = glue(last.text, line.text)
         last.lines += 1
@@ -137,7 +142,7 @@ const tocKey = (text) => text.replace(/[\s.…·．]+\d*$/, '').replace(/^[\d一
  * printed contents near the front, set larger than the body text, or centred. A kind found more
  * than once every other page is verse or captions, not headings, and is left out.
  */
-function headingMarks(paras, starts, pages) {
+function headingMarks(paras, starts, pages, ocr) {
   const body = mode(paras.flatMap((p) => Array(p.lines).fill(Math.round(p.size * 2) / 2)))
   const front = new Set(paras.slice(0, Math.ceil(paras.length * 0.2)).map((p) => tocKey(p.text)))
   const seen = new Set()
@@ -152,7 +157,7 @@ function headingMarks(paras, starts, pages) {
     if (p.lines > 1 || p.text.length > 40 || /[。，；,;.]$/.test(p.text) || (front.has(key) && last.get(key) > i)) continue
     const mark = { title: p.text.trim(), at: starts[i] }
     if (listed && key.length >= 2) kinds.contents.push(mark)
-    else if (p.size >= body * 1.15) kinds.larger.push(mark)
+    else if (p.size >= body * (ocr ? 1.4 : 1.15)) kinds.larger.push(mark)
     else if (p.centered) kinds.centred.push(mark)
   }
   return Object.values(kinds).filter((marks) => marks.length <= pages / 2).flat().sort((a, b) => a.at - b.at)
@@ -180,18 +185,64 @@ function usable(outline, pages) {
 /** Metadata titles are often a scanner's or a word processor's. */
 const realTitle = (title) => title && !/^(KM_|untitled|microsoft|scan|扫描|document)|\.(pdf|docx?|txt)$/i.test(title) ? title : null
 
-export async function readPdf(buffer) {
+const OCR_SOURCE = join(dirname(fileURLToPath(import.meta.url)), 'ocr.swift')
+
+/** The compiled OCR helper, built once per version of ocr.swift into the user's cache. */
+async function ocrHelper() {
+  if (process.platform !== 'darwin') throw new Error('这个 PDF 是扫描版，识别文字要在 macOS 上导入')
+  const source = await readFile(OCR_SOURCE)
+  const bin = join(homedir(), 'Library', 'Caches', 'dsh-reader', `ocr-${createHash('sha1').update(source).digest('hex').slice(0, 10)}`)
+  try { await access(bin); return bin } catch { /* not built yet */ }
+  await mkdir(dirname(bin), { recursive: true })
+  await new Promise((resolve, reject) => execFile('swiftc', ['-O', '-o', `${bin}.tmp`, OCR_SOURCE], (error, _, stderr) => {
+    if (error?.code === 'ENOENT') reject(new Error('识别扫描版需要 Xcode 命令行工具，先在终端运行：xcode-select --install'))
+    else if (error) reject(new Error(`文字识别工具编译失败：${String(stderr || error.message).split('\n')[0]}`))
+    else resolve()
+  }))
+  await rename(`${bin}.tmp`, bin)
+  return bin
+}
+
+/** Pages of a scanned PDF as pdftotext-like pages, through Vision; `onProgress(done, total)` after each page. */
+async function ocrPages(file, onProgress) {
+  const child = spawn(await ocrHelper(), [file], { stdio: ['ignore', 'pipe', 'pipe'] })
+  let stderr = ''
+  child.stderr.on('data', (chunk) => { stderr += chunk })
+  const exited = new Promise((resolve) => child.on('close', resolve))
+  const pages = []
+  for await (const row of createInterface({ input: child.stdout })) {
+    const page = JSON.parse(row)
+    // Vision lists lines roughly top to bottom; make it exact, left to right within a row.
+    page.lines = page.lines.map((l) => ({ ...l, flow: 0 })).sort((a, b) => Math.abs(a.y0 - b.y0) < (a.y1 - a.y0) / 2 ? a.x0 - b.x0 : a.y0 - b.y0)
+    pages[page.page] = page
+    onProgress?.(pages.filter(Boolean).length, page.pages)
+  }
+  if (await exited !== 0) throw new Error(`文字识别失败：${stderr.trim().split('\n')[0] || '未知错误'}`)
+  return Array.from(pages, (page) => page ?? { width: 0, lines: [] })
+}
+
+const textChars = (pages) => pages.reduce((n, p) => n + p.lines.reduce((m, l) => m + l.text.replace(/\s/g, '').length, 0), 0)
+
+/**
+ * `{ title, text, marks, headings }`: `marks` from the bookmarks, `headings` found from the layout.
+ * `onProgress(done, total)` reports pages recognised when the PDF is scanned.
+ */
+export async function readPdf(buffer, { onProgress } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-reader-pdf-'))
   try {
     const file = join(dir, 'book.pdf')
     await writeFile(file, buffer)
     const xhtml = await run('pdftotext', ['-bbox-layout', '-q', file, '-'])
-    const pages = readPages(xhtml)
-    const chars = pages.reduce((n, p) => n + p.lines.reduce((m, l) => m + l.text.replace(/\s/g, '').length, 0), 0)
-    if (chars < Math.max(200, pages.length * 30)) throw new Error('这个 PDF 是扫描版（只有图片，没有文字），读不了')
+    let pages = readPages(xhtml)
+    const enough = (pages) => textChars(pages) >= Math.max(200, pages.length * 30)
+    const ocr = !enough(pages)
+    if (ocr) {
+      pages = await ocrPages(file, onProgress)
+      if (!enough(pages)) throw new Error('这个 PDF 是扫描版，但识别不出文字')
+    }
     dropFurniture(pages)
 
-    const paras = paragraphs(pages)
+    const paras = paragraphs(pages, ocr)
     let text = ''
     const starts = paras.map((p) => { const at = text.length; text += `${p.text}\n`; return at })
     // Where each page's text starts: its first paragraph, or the next page's if it begins none.
@@ -214,7 +265,7 @@ export async function readPdf(buffer) {
       }).sort((a, b) => a.at - b.at).filter((m, i, all) => i === 0 || m.at > all[i - 1].at)
       : []
     const title = realTitle(decodeEntities(xhtml.match(/<title>([^<]*)<\/title>/)?.[1] ?? '').trim())
-    return { title, text, marks: fromOutline, headings: headingMarks(paras, starts, pages.length) }
+    return { title, text, marks: fromOutline, headings: headingMarks(paras, starts, pages.length, ocr) }
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

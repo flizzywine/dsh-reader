@@ -33,10 +33,10 @@ async function writeJsonFile(path, value) {
 const readBindings = () => readJsonFile(BINDINGS)
 
 /** Split an uploaded TXT, EPUB or PDF into a new book folder under a free name; returns the new book id. */
-async function importBook(name, buffer) {
+async function importBook(name, buffer, { onProgress } = {}) {
   const ext = extname(String(name ?? '')).toLowerCase()
   if (!BOOK_TYPES.includes(ext)) throw new Error('目前只支持 TXT、EPUB 和 PDF')
-  const book = await parseBook(ext, buffer)
+  const book = await parseBook(ext, buffer, { onProgress })
   // An EPUB or PDF names itself; its file name is often a download site's.
   // Download sites tag their file names: `书名 (z-library.sk, 1lib.sk)`, `书名_z_library_sk,_1lib_sk`.
   const fileStem = basename(String(name), extname(String(name))).replace(/[\s_]*[(（]?z[-_\s]?library[\s\S]*$/i, '')
@@ -297,6 +297,23 @@ function lastPositionNote(messages = []) {
   return undefined
 }
 
+/**
+ * Imports run in the background, since recognising a scanned PDF takes minutes: `import` answers
+ * with a job id at once, `import-status` with `{ done, total }` pages so far, then `result` or `error`.
+ */
+const imports = new Map()
+const IMPORT_JOB_TTL_MS = 10 * 60 * 1000
+
+function startImport(name, buffer) {
+  const id = randomUUID()
+  const job = { done: 0, total: 0 }
+  imports.set(id, job)
+  importBook(name, buffer, { onProgress: (done, total) => Object.assign(job, { done, total }) })
+    .then((result) => { job.result = result }, (error) => { job.error = String(error?.message ?? error) })
+    .finally(() => setTimeout(() => imports.delete(id), IMPORT_JOB_TTL_MS).unref())
+  return { job: id }
+}
+
 function send(res, status, body) {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
   res.end(JSON.stringify(body))
@@ -315,7 +332,11 @@ export function apply(ctx) {
       const endpoint = url.pathname.slice(ROUTE.length + 1)
       try {
         // Imports post the raw file; the name rides in the query string.
-        if (endpoint === 'import') return send(res, 200, { result: await importBook(url.searchParams.get('name'), await readBody(req, IMPORT_LIMIT_BYTES)) })
+        if (endpoint === 'import') return send(res, 200, { result: startImport(url.searchParams.get('name'), await readBody(req, IMPORT_LIMIT_BYTES)) })
+        if (endpoint === 'import-status') {
+          const job = imports.get((await readJson(req)).job)
+          return job ? send(res, 200, { result: job }) : send(res, 404, { error: '导入任务不见了，可能服务重启过' })
+        }
         send(res, 200, { result: await handleCall(endpoint, await readJson(req)) })
       } catch (error) {
         send(res, 500, { error: String(error?.message ?? error) })
