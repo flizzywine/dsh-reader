@@ -187,7 +187,11 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-bd-progress div{display:flex;justify-content:space-between}
 .dr-bd-progress i{display:block;height:4px;border-radius:2px;background:color-mix(in srgb,currentColor 12%,transparent);overflow:hidden}
 .dr-bd-progress b{display:block;height:100%;border-radius:2px;background:var(--dr-hl-line)}
-.dr-bd-actions{margin-top:6px;display:flex;gap:8px}
+.dr-bd-actions{margin-top:6px;display:flex;flex-wrap:wrap;gap:8px}
+.dr-bd-act{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:.5px solid var(--dsw-alias-border-l2);border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;cursor:pointer}
+.dr-bd-act:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.dr-bd-act-danger{color:#c0392b}
+.dr-bd-act-danger:hover{color:#c0392b;border-color:color-mix(in srgb,#c0392b 50%,transparent);background:color-mix(in srgb,#c0392b 8%,transparent)}
 .dr-bd-tabs{position:sticky;top:0;z-index:1;display:flex;gap:4px;padding:4px;border-radius:10px;border:.5px solid var(--dsw-alias-border-l2);background:var(--dr-solid)}
 .dr-bd-tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;height:30px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;cursor:pointer}
 .dr-bd-tabs button[aria-selected="true"]{background:color-mix(in srgb,currentColor 9%,transparent);color:var(--dsw-alias-label-primary);font-weight:650}
@@ -312,11 +316,9 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 .dr-gm{width:min(440px,100%)}
 .dr-more{flex:none}
 .dr-more .dr-gf-menu{left:auto;right:0;width:150px}
-.dr-more-btn{width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
+.dr-more-btn{width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .dr-more-btn svg{stroke-width:3}
 .dr-more-btn:hover,.dr-more-btn[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dr-bd-title{display:flex;align-items:flex-start;gap:6px}
-.dr-bd-title h3{flex:1;min-width:0}
 .dr-gm-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--dsw-alias-border-l2)}
 .dr-gm-row>span{flex:1;min-width:0;overflow-wrap:anywhere}
 .dr-bd-group{align-self:flex-start;max-width:100%}
@@ -1181,14 +1183,17 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return h('div', { className: 'dr-lib dr-bd' },
         h('button', { type: 'button', className: 'dr-back', onClick: onBack }, h(Icon, { name: 'left', size: 14 }), '书库'),
         h('header', { className: 'dr-bd-head' },
-          h('div', { className: 'dr-bd-title' }, h('h3', null, book.title), h(MoreMenu, { items: menu })),
+          h('h3', null, book.title),
           h('p', null, `${formatChars(book.chars)} · ${book.chapters} 节`),
           h(GroupSelect, { app, book, groups }),
           reading ? h('div', { className: 'dr-bd-progress' },
             h('div', null, h('span', null, `读到第 ${(binding.chapter ?? 0) + 1} 节`), h('span', null, `${progress}%`)),
             h('i', null, h('b', { style: { width: `${progress}%` } }))) : null,
-          reading ? null : h('div', { className: 'dr-bd-actions' },
-            h('button', { type: 'button', className: 'dr-btn', onClick: () => (binding?.bookId ? fresh(book.id) : here(book.id)) }, binding?.bookId ? '新开阅读' : '打开阅读'))),
+          // The book's own actions, spelled out rather than behind ⋯: reading first, then managing it.
+          h('div', { className: 'dr-bd-actions' },
+            reading ? null : h('button', { type: 'button', className: 'dr-btn', onClick: () => (binding?.bookId ? fresh(book.id) : here(book.id)) }, binding?.bookId ? '新开阅读' : '打开阅读'),
+            menu.map((item) => h('button', { key: item.label, type: 'button', className: 'dr-bd-act' + (item.danger ? ' dr-bd-act-danger' : ''), onClick: item.onClick },
+              h(Icon, { name: item.icon, size: 15 }), item.label)))),
         h('div', { className: 'dr-bd-tabs', role: 'tablist' }, tabs.map(([id, label, n]) =>
           h('button', { key: id, type: 'button', role: 'tab', 'aria-selected': tab === id, onClick: () => setTab(id) }, label, n ? h('em', null, n) : null))),
         tab === 'marks' ? (highlights === null ? empty('读取中…')
@@ -1239,9 +1244,9 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const shown = detail && books?.find((b) => b.id === detail)
       // ⋯ on a card and on the book's page: rename, show the folder, delete.
       const bookMenu = (b) => [
-        { label: '重命名', onClick: async () => { const id = await renameBookFlow(app, b); if (id && detail === b.id) setDetail(id) } },
-        { label: '在访达中显示', onClick: () => app.rpc('reveal', { bookId: b.id }).catch(failed) },
-        { label: '删除', danger: true, onClick: async () => { if (await deleteBooksFlow(app, [b]) && detail === b.id) setDetail(null) } },
+        { label: '重命名', icon: 'pen', onClick: async () => { const id = await renameBookFlow(app, b); if (id && detail === b.id) setDetail(id) } },
+        { label: '在访达中显示', icon: 'folder', onClick: () => app.rpc('reveal', { bookId: b.id }).catch(failed) },
+        { label: '删除', icon: 'trash', danger: true, onClick: async () => { if (await deleteBooksFlow(app, [b]) && detail === b.id) setDetail(null) } },
       ]
       if (shown) return h(BookDetail, { app, book: shown, groups, sessionId, binding, onBack: () => setDetail(null), here, fresh, menu: bookMenu(shown) })
       return h('div', { className: 'dr-lib' },
