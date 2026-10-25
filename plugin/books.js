@@ -15,9 +15,11 @@
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { readEpub } from './epub.js'
+import { readPdf } from './pdf.js'
 
 export const SOURCE_FILE = '原文.txt'
 export const SOURCE_EPUB = '原文.epub'
+export const SOURCE_PDF = '原文.pdf'
 export const TOC_FILE = '目录.json'
 export const CHAPTER_DIR = '章节'
 export const SUMMARY_DIR = '总结'
@@ -59,9 +61,13 @@ function chunk(text, size) {
 
 const partName = (i) => i < CHINESE_DIGITS.length ? CHINESE_DIGITS[i] : String(i + 1)
 
-/** Split a whole book into `[{ title, text }]`, text including its heading line. */
-export function splitBook(text) {
-  const marks = [...text.matchAll(HEADING)].map((m) => ({ title: m[1].trim(), at: m.index }))
+/**
+ * Split a whole book into `[{ title, text }]`, text including its heading line. `fallback` marks
+ * (headings found some other way) are used when no line looks like a chapter heading.
+ */
+export function splitBook(text, fallback = []) {
+  let marks = [...text.matchAll(HEADING)].map((m) => ({ title: m[1].trim(), at: m.index }))
+  if (marks.length === 0 && fallback.length > 1) marks = fallback
   if (marks.length === 0) return chunk(text, PART_CHARS).map((piece, i) => ({ title: `第 ${i + 1} 节`, text: piece }))
   return cutAtMarks(text, marks)
 }
@@ -91,13 +97,17 @@ function cutAtMarks(text, marks) {
 }
 
 /** File types a book can be imported from. */
-export const BOOK_TYPES = ['.txt', '.epub']
+export const BOOK_TYPES = ['.txt', '.epub', '.pdf']
 
 /**
  * Read an imported file into `{ title, text, parts, source }`: `title` is the book's own
- * (EPUB metadata) or null, `source` the file name the original is kept under.
+ * (EPUB/PDF metadata) or null, `source` the file name the original is kept under.
  */
-export function parseBook(ext, buffer) {
+export async function parseBook(ext, buffer) {
+  if (ext === '.pdf') {
+    const { title, text, marks, headings } = await readPdf(buffer)
+    return { title, text, parts: marks.length > 1 ? cutAtMarks(text, marks) : splitBook(text, headings), source: SOURCE_PDF }
+  }
   if (ext === '.epub') {
     const { title, text, marks } = readEpub(buffer)
     // A one-entry contents list says nothing about chapters; look for headings as in a TXT.
@@ -137,7 +147,7 @@ export async function writeBook(library, id, buffer, { text, parts, source }) {
 }
 
 /**
- * Move books still lying flat in library/ (`书名.txt`, `书名.epub`) into their folders.
+ * Move books still lying flat in library/ (`书名.txt`, `书名.epub`, `书名.pdf`) into their folders.
  * @returns a map from the old id (`书名.txt`) to the new folder id, for rewriting bindings.
  */
 export async function migrateFlatBooks(library) {
@@ -148,7 +158,7 @@ export async function migrateFlatBooks(library) {
     const id = safeName(basename(name, extname(name)))
     try { await stat(join(library, id)); continue } catch { /* folder is free */ }
     const buffer = await readFile(join(library, name))
-    await writeBook(library, id, buffer, parseBook(ext, buffer))
+    await writeBook(library, id, buffer, await parseBook(ext, buffer))
     await rm(join(library, name))
     moved.set(name, id)
   }

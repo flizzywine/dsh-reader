@@ -32,13 +32,15 @@ async function writeJsonFile(path, value) {
 
 const readBindings = () => readJsonFile(BINDINGS)
 
-/** Split an uploaded TXT or EPUB into a new book folder under a free name; returns the new book id. */
+/** Split an uploaded TXT, EPUB or PDF into a new book folder under a free name; returns the new book id. */
 async function importBook(name, buffer) {
   const ext = extname(String(name ?? '')).toLowerCase()
-  if (!BOOK_TYPES.includes(ext)) throw new Error('目前只支持 TXT 和 EPUB')
-  const book = parseBook(ext, buffer)
-  // An EPUB names itself; its file name is often a download site's.
-  const stem = safeName(book.title || basename(String(name), extname(String(name))))
+  if (!BOOK_TYPES.includes(ext)) throw new Error('目前只支持 TXT、EPUB 和 PDF')
+  const book = await parseBook(ext, buffer)
+  // An EPUB or PDF names itself; its file name is often a download site's.
+  // Download sites tag their file names: `书名 (z-library.sk, 1lib.sk)`, `书名_z_library_sk,_1lib_sk`.
+  const fileStem = basename(String(name), extname(String(name))).replace(/[\s_]*[(（]?z[-_\s]?library[\s\S]*$/i, '')
+  const stem = safeName(book.title || fileStem)
   for (let n = 1; ; n += 1) {
     const id = n === 1 ? stem : `${stem} (${n})`
     try { await stat(join(LIBRARY, id)) } catch {

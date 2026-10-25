@@ -414,7 +414,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         } catch (e) { setError(String(e?.message ?? e)) } finally { setBusy(false) }
       }
       return h(React.Fragment, null,
-        h('input', { ref: input, type: 'file', accept: '.txt,.epub,text/plain,application/epub+zip', multiple: true, hidden: true, onChange: pick }),
+        h('input', { ref: input, type: 'file', accept: '.txt,.epub,.pdf,text/plain,application/epub+zip,application/pdf', multiple: true, hidden: true, onChange: pick }),
         h('button', { type: 'button', className: className ?? 'dr-btn', disabled: busy, onClick: () => input.current?.click() }, busy ? '导入中…' : label),
         error ? h('p', { className: 'dr-error' }, error) : null)
     }
