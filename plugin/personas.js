@@ -67,17 +67,19 @@ function personaName(name) {
 }
 
 /**
- * Apply one `select | save | restore | create | rename | delete | bind` action and return the next
- * settings. `create` also selects the new persona; `bind` gives `group` persona `id` ('' blank),
- * or back to the default when `id` is null.
+ * Apply one `select | save | restore | create | copy | rename | delete | bind` action and return
+ * the next settings. `create` and `copy` (of `id`) append a persona of the user's own, not chosen;
+ * `bind` gives `group` persona `id` ('' blank), or back to the default when `id` is null.
  */
 export function managePersona(settings, { action, id, text, name, group }) {
   const custom = settings.custom ?? []
   const builtin = BUILTIN_PERSONAS.some((item) => item.id === id)
   const own = custom.some((item) => item.id === id)
-  if (action === 'create') {
-    const item = { id: `c${Date.now().toString(36)}`, name: personaName(name), text: String(text ?? NEW_PERSONA_TEXT) }
-    return { ...settings, custom: [...custom, item], activeId: item.id }
+  if (action === 'create' || action === 'copy') {
+    const source = action === 'copy' ? personaView(settings).items.find((item) => item.id === id) : null
+    if (action === 'copy' && !source) throw new Error(`unknown persona: ${id}`)
+    const item = { id: `c${Date.now().toString(36)}`, name: personaName(name ?? `${source.name} 副本`), text: String(text ?? source?.text ?? NEW_PERSONA_TEXT) }
+    return { ...settings, custom: [...custom, item] }
   }
   if (action === 'bind') {
     const groups = { ...settings.groups }

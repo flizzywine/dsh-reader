@@ -319,8 +319,26 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 .dr-error{color:#e5484d;font-size:12px;margin:0}
 .dr-persona{height:100%;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary)}
 .dr-persona textarea{flex:1;min-height:240px;resize:vertical;font:inherit;font-size:13px;line-height:1.6;color:inherit;background:var(--dsw-alias-bg-module-platform);border:none;border-radius:10px;padding:12px}
-.dr-persona select{font:inherit;color:inherit;background:var(--dsw-alias-bg-module-platform);border:none;border-radius:8px;padding:7px 8px}
 .dr-persona-actions{display:flex;gap:8px;justify-content:flex-end}
+.dr-ps-label{display:flex;align-items:center;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--dsw-alias-label-tertiary)}
+.dr-ps-card{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px 10px;padding:12px;border:.5px solid var(--dsw-alias-border-l2);border-radius:12px;background:color-mix(in srgb,currentColor 3%,transparent)}
+.dr-ps-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:color-mix(in srgb,var(--dsw-alias-brand-primary) 13%,transparent);color:var(--dsw-alias-brand-primary)}
+.dr-ps-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dr-ps-text b{font-size:14px;font-weight:600}
+.dr-ps-text small{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
+.dr-ps-more{border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary) 42%,transparent);border-radius:999px;background:transparent;color:var(--dsw-alias-brand-primary);font:inherit;font-size:12px;padding:3px 10px;cursor:pointer}
+.dr-ps-more:disabled{opacity:.4;cursor:default}
+.dr-ps-choose{grid-column:1/-1}
+.dr-ps-choose .dr-chip{width:100%;justify-content:flex-start;height:32px;border-radius:9px}
+.dr-ps-choose .dr-chip svg:last-child{margin-left:auto}
+.dr-ps-item{display:flex;flex-direction:column;gap:4px;width:100%;padding:11px 12px;border:0;border-radius:10px;background:color-mix(in srgb,currentColor 6%,transparent);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dr-ps-item:hover{background:color-mix(in srgb,currentColor 9%,transparent)}
+.dr-ps-item-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.dr-ps-item-head b{font-size:14px;font-weight:600}
+.dr-ps-item-head em{font-style:normal;font-size:11px;padding:1px 6px;border-radius:999px;background:color-mix(in srgb,currentColor 8%,transparent);color:var(--dsw-alias-label-secondary)}
+.dr-ps-used{font-size:11px;color:var(--dsw-alias-brand-primary)}
+.dr-ps-item p{margin:0;font-size:12px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dr-ps-actions{flex-wrap:wrap}
 @media (max-width:640px){.dr-text{padding:20px 16px 80px;font-size:16px}}
 `
 
@@ -601,18 +619,21 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 
     const FOLLOW_DEFAULT = '\u0000default'
 
+    /** Menu options for choosing a persona: 空白, then built-ins and the user's own under headings. */
+    const personaOptions = (personas) => [
+      { value: '', label: '空白（不带性格）' },
+      { heading: '内置' }, ...personas.items.filter((item) => item.builtin).map((item) => ({ value: item.id, label: item.name })),
+      ...(personas.items.some((item) => !item.builtin) ? [{ heading: '我的' }, ...personas.items.filter((item) => !item.builtin).map((item) => ({ value: item.id, label: item.name }))] : []),
+    ]
+    const personaName = (personas, id) => id === '' ? '空白' : personas.items.find((item) => item.id === id)?.name
+
     /** 性格 chip on a 管理分组 row: follow the default, blank, or a persona of the group's own. */
     function GroupPersona({ app, group, personas }) {
       if (!personas) return null
       const bound = personas.groups[group]
       const value = bound === undefined ? FOLLOW_DEFAULT : bound
-      const name = (id) => id === '' ? '空白' : personas.items.find((item) => item.id === id)?.name
-      const options = [
-        { value: FOLLOW_DEFAULT, label: `跟随默认（${name(personas.activeId) ?? '空白'}）` },
-        { value: '', label: '空白（不带性格）' },
-        { heading: '内置' }, ...personas.items.filter((item) => item.builtin).map((item) => ({ value: item.id, label: item.name })),
-        ...(personas.items.some((item) => !item.builtin) ? [{ heading: '我的' }, ...personas.items.filter((item) => !item.builtin).map((item) => ({ value: item.id, label: item.name }))] : []),
-      ]
+      const name = (id) => personaName(personas, id)
+      const options = [{ value: FOLLOW_DEFAULT, label: `跟随默认（${name(personas.activeId) ?? '空白'}）` }, ...personaOptions(personas)]
       return h(ChipMenu, {
         icon: 'persona', title: '这个分组的书用哪个工作台性格', value,
         label: value === FOLLOW_DEFAULT ? '跟随默认' : name(value) ?? '跟随默认',
@@ -754,53 +775,104 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return view
     }
 
-    /** Right Sidebar 工作台性格 page: pick a built-in, one of the user's own or blank; edit, add, rename, delete. */
+    /**
+     * Right Sidebar 工作台性格 page, laid out like tavern's 预设: an overview of which persona reads
+     * what (the default, then each 书库 group) and every persona as a card; a card opens its detail.
+     */
     function PersonaTab({ app }) {
-      const view = usePersonas(app)
-      const [draft, setDraft] = useState(null)
+      const personas = usePersonas(app)
+      const { books, groups } = useLibrary(app)
+      const [detail, setDetail] = useState(null)
       const [notice, setNotice] = useState('')
-      const [busy, setBusy] = useState(false)
-      if (view === null) return h('div', { className: 'dr-persona' }, h('p', { className: 'dr-note' }, '读取中…'))
-      const active = view.items.find((item) => item.id === view.activeId) ?? null
-      const text = draft ?? active?.text ?? ''
-      const dirty = active !== null && draft !== null && draft !== active.text
-      async function manage(payload, message) {
-        if (dirty && payload.action !== 'save' && !window.confirm('当前性格有未保存的修改，继续会丢弃这些修改。是否继续？')) return
-        setBusy(true)
+      if (personas === null) return h('div', { className: 'dr-persona' }, h('p', { className: 'dr-note' }, '读取中…'))
+      const shown = detail && personas.items.find((item) => item.id === detail)
+      if (shown) return h(PersonaDetail, { app, personas, groups, persona: shown, onBack: () => setDetail(null), onOpen: setDetail })
+      // Where each persona is used: 默认 and the groups bound to it.
+      const usedBy = (id) => [...(personas.activeId === id ? ['默认'] : []), ...groups.filter((g) => personas.groups[g] === id)]
+      const select = (id) => app.rpc('persona', { action: 'select', id }).then(() => app.personasChanged.bump(), (e) => window.alert(String(e?.message ?? e)))
+      async function create() {
+        const name = window.prompt('新性格的名字（比如：命理老师、讲经法师）')?.trim()
+        if (!name) return
         try {
-          await app.rpc('persona', payload)
-          setDraft(null)
-          setNotice(message)
+          const view = await app.rpc('persona', { action: 'create', name })
           app.personasChanged.bump()
-        } catch (e) { setNotice(String(e?.message ?? e)) } finally { setBusy(false) }
+          setDetail(view.items.at(-1).id)
+        } catch (e) { setNotice(String(e?.message ?? e)) }
       }
+      const preview = (text) => text.split('\n').map((line) => line.replace(/^[#>*\-\s]+/, '').trim()).find((line) => line && !/^你的(身份|风格)$/.test(line)) ?? ''
       return h('div', { className: 'dr-persona' },
         h('div', { className: 'dr-lib-head' }, h('div', null,
           h('h3', null, '工作台性格'),
-          h('p', null, '这里选的是默认性格。分组可以在书库「管理分组」里绑定自己的性格，组里的书就用它。改动从下一次请求开始生效。'))),
-        h('select', {
-          value: view.activeId, disabled: busy,
-          onChange: (e) => manage({ action: 'select', id: e.target.value }, e.target.value ? '已切换性格。' : '已切换为空白。'),
-        }, h('option', { value: '' }, '空白（不带性格）'),
-          h('optgroup', { label: '内置' }, view.items.filter((item) => item.builtin).map((item) => h('option', { key: item.id, value: item.id }, item.name + (item.modified ? '（已修改）' : '')))),
-          view.items.some((item) => !item.builtin) ? h('optgroup', { label: '我的' }, view.items.filter((item) => !item.builtin).map((item) => h('option', { key: item.id, value: item.id }, item.name))) : null),
-        h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy, style: { alignSelf: 'flex-start' }, onClick: () => {
-          const name = window.prompt('新性格的名字（比如：命理老师、讲经法师）')?.trim()
-          if (name) manage({ action: 'create', name }, `已新建「${name}」并切换过去。写好性格内容后点保存。`)
-        } }, '＋ 新建性格'),
-        active === null ? h('p', { className: 'dr-note' }, '当前为空白：Agent 不带自定义性格。')
-          : h(React.Fragment, null,
-            h('textarea', { value: text, disabled: busy, 'aria-label': '性格内容', onChange: (e) => { setDraft(e.target.value); setNotice('') } }),
-            h('div', { className: 'dr-persona-actions' },
-              active.builtin
-                ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy || !active.modified, onClick: () => window.confirm(`把「${active.name}」恢复为内置的默认内容？你的修改会丢失。`) && manage({ action: 'restore', id: active.id }, '已恢复默认内容。') }, '恢复默认')
-                : h(React.Fragment, null,
-                  h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', disabled: busy, onClick: () => window.confirm(`删除性格「${active.name}」？删除后不能恢复。`) && manage({ action: 'delete', id: active.id }, '已删除，当前为空白。') }, '删除'),
-                  h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy, onClick: () => {
-                    const name = window.prompt('新的名字', active.name)?.trim()
-                    if (name && name !== active.name) manage({ action: 'rename', id: active.id, name }, '已重命名。')
-                  } }, '重命名')),
-              h('button', { type: 'button', className: 'dr-btn', disabled: busy || !dirty, onClick: () => manage({ action: 'save', id: active.id, text }, '已保存，从下一次请求开始生效。') }, '保存'))),
+          h('p', null, '陪读 Agent 的性格。书所在的分组绑定了性格就用分组的，否则用默认的。改动从下一次请求开始生效。'))),
+        h('div', { className: 'dr-ps-label' }, '谁用哪个'),
+        h('div', { className: 'dr-ps-card' },
+          h('span', { className: 'dr-ps-icon' }, h(Icon, { name: 'persona', size: 17 })),
+          h('div', { className: 'dr-ps-text' }, h('b', null, '默认性格'), h('small', null, '未分组的书、没绑定性格的分组用它')),
+          h('button', { type: 'button', className: 'dr-ps-more', disabled: !personas.activeId, onClick: () => setDetail(personas.activeId) }, '详情 ›'),
+          h(ChipMenu, { className: 'dr-ps-choose', label: personaName(personas, personas.activeId) ?? '空白', title: '默认性格', value: personas.activeId, options: personaOptions(personas), onPick: select })),
+        groups.map((g) => {
+          const bound = personas.groups[g]
+          const effective = bound !== undefined && (bound === '' || personas.items.some((item) => item.id === bound)) ? bound : personas.activeId
+          return h('div', { key: g, className: 'dr-ps-card' },
+            h('span', { className: 'dr-ps-icon' }, h(Icon, { name: 'folder', size: 17 })),
+            h('div', { className: 'dr-ps-text' }, h('b', null, g), h('small', null, `分组 · ${(books ?? []).filter((b) => b.group === g).length} 本书`)),
+            h('button', { type: 'button', className: 'dr-ps-more', disabled: !effective, onClick: () => setDetail(effective) }, '详情 ›'),
+            h('div', { className: 'dr-ps-choose' }, h(GroupPersona, { app, group: g, personas })))
+        }),
+        h('div', { className: 'dr-ps-label' }, h('span', null, '全部性格'), h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: create }, '＋ 新建性格')),
+        personas.items.map((item) => h('button', { key: item.id, type: 'button', className: 'dr-ps-item', onClick: () => setDetail(item.id) },
+          h('div', { className: 'dr-ps-item-head' },
+            h('b', null, item.name),
+            h('em', null, item.builtin ? (item.modified ? '内置 · 已修改' : '内置') : '我的'),
+            usedBy(item.id).length ? h('span', { className: 'dr-ps-used' }, `在用：${usedBy(item.id).join('、')}`) : null),
+          h('p', null, preview(item.text) || '（还没写内容）'))),
+        notice ? h('p', { className: 'dr-note' }, notice) : null)
+    }
+
+    /** One persona: where it is used, 设为默认 / 复制 / 重命名 / 删除, and its text to edit. */
+    function PersonaDetail({ app, personas, groups, persona, onBack, onOpen }) {
+      const [draft, setDraft] = useState(null)
+      const [notice, setNotice] = useState('')
+      const [busy, setBusy] = useState(false)
+      useEffect(() => { setDraft(null); setNotice('') }, [persona.id])
+      const text = draft ?? persona.text
+      const dirty = draft !== null && draft !== persona.text
+      const discard = () => !dirty || window.confirm('有未保存的修改，继续会丢弃这些修改。是否继续？')
+      async function manage(payload, message, then) {
+        if (payload.action !== 'save' && !discard()) return
+        setBusy(true)
+        try {
+          const view = await app.rpc('persona', payload)
+          setDraft(null)
+          setNotice(message)
+          app.personasChanged.bump()
+          then?.(view)
+        } catch (e) { setNotice(String(e?.message ?? e)) } finally { setBusy(false) }
+      }
+      const isDefault = personas.activeId === persona.id
+      const boundGroups = groups.filter((g) => personas.groups[g] === persona.id)
+      const used = [...(isDefault ? ['默认性格'] : []), ...boundGroups.map((g) => `分组「${g}」`)]
+      return h('div', { className: 'dr-persona' },
+        h('button', { type: 'button', className: 'dr-back', onClick: () => discard() && onBack() }, h(Icon, { name: 'left', size: 14 }), '工作台性格'),
+        h('header', { className: 'dr-bd-head' },
+          h('h3', null, persona.name),
+          h('p', null, [persona.builtin ? (persona.modified ? '内置 · 已修改' : '内置') : '我的', used.length ? `在用：${used.join('、')}` : '没在用'].join(' · '))),
+        h('div', { className: 'dr-row dr-ps-actions' },
+          isDefault ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy, onClick: () => manage({ action: 'select', id: persona.id }, '已设为默认性格。') }, '设为默认'),
+          h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy, onClick: () => manage({ action: 'copy', id: persona.id }, '已复制。', (view) => onOpen(view.items.at(-1).id)) }, '复制'),
+          persona.builtin ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy, onClick: () => {
+            const name = window.prompt('新的名字', persona.name)?.trim()
+            if (name && name !== persona.name) manage({ action: 'rename', id: persona.id, name }, '已重命名。')
+          } }, '重命名'),
+          persona.builtin ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', disabled: busy, onClick: () => {
+            const note = used.length ? `\n${used.join('、')}会改回默认。` : ''
+            if (window.confirm(`删除性格「${persona.name}」？删除后不能恢复。${note}`)) manage({ action: 'delete', id: persona.id }, '', onBack)
+          } }, '删除')),
+        h('div', { className: 'dr-ps-label' }, '内容'),
+        h('textarea', { value: text, disabled: busy, 'aria-label': '性格内容', onChange: (e) => { setDraft(e.target.value); setNotice('') } }),
+        h('div', { className: 'dr-persona-actions' },
+          persona.builtin ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy || !persona.modified, onClick: () => window.confirm(`把「${persona.name}」恢复为内置的默认内容？你的修改会丢失。`) && manage({ action: 'restore', id: persona.id }, '已恢复默认内容。') }, '恢复默认') : null,
+          h('button', { type: 'button', className: 'dr-btn', disabled: busy || !dirty, onClick: () => manage({ action: 'save', id: persona.id, text }, '已保存，从下一次请求开始生效。') }, '保存')),
         notice ? h('p', { className: 'dr-note' }, notice) : null)
     }
 
