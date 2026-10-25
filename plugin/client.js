@@ -902,7 +902,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           : null)
     }
 
-    /** Right Sidebar 书库 page: one card per book, like tavern's 人物卡库; a card opens the book's page. */
+    /** Right Sidebar 书库 page: one card per book, like tavern's 人物卡库; a card opens the book's page, where reading starts. */
     function LibraryTab({ sessionId, app }) {
       const { books, groups, error } = useLibrary(app)
       const binding = useBinding(app.store, sessionId)
@@ -930,11 +930,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                   h('div', { className: 'dr-card-title' }, (b.id === current ? '✓ ' : '') + b.title),
                   h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`
                     + (b.id === current ? ` · 读到第 ${(binding.chapter ?? 0) + 1} 节` : ''))),
-                b.id === current
-                  ? h('span', { className: 'dr-note' }, '在读')
-                  : h('div', { className: 'dr-row' },
-                    h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '在这个对话里换成这本书', onClick: () => here(b.id) }, current ? '换到这本' : '打开'),
-                    current ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', title: '为这本书新开一个对话', onClick: () => fresh(b.id) }, '新开') : null)) }))
+                b.id === current ? h('span', { className: 'dr-note' }, '在读') : null) }))
     }
 
     const HEADING_LINE = /^(第[0-9零一二三四五六七八九十百千万两〇]+[章回节卷集部篇]|序章|序言|楔子|引子|尾声|后记|番外)/
