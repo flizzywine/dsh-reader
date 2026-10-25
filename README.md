@@ -21,6 +21,13 @@ dsh-reader open       # 页面关了，重新打开
 dsh-reader logs       # 最近的日志
 ```
 
+- **装别的 DSH 插件**（比如用 ChatGPT 订阅的 [dsh-codex-subscription](https://github.com/WSL043/dsh-codex-subscription)）：
+
+  ```bash
+  dsh plugin --profile reader add dsh-codex-subscription@3.1.6
+  ```
+
+  然后把包名加进 `~/.dsh/profiles/reader/package.json` 的 `dsh.profile.bundles`（放在 `dsh-reader` 前面），再 `dsh-reader restart`。pnpm 要是报「Ignored build scripts」，在同目录的 `pnpm-workspace.yaml` 里 `allowBuilds:` 下把列出的包设成 `false` 再装一次（插件自己的仓库就是这么设的）。重跑 `setup-profile.sh` 会保留这些插件。
 - 端口固定为 `30160`，可以用 `DSH_READER_PORT` 改。
 - 日志和 PID 记录在 `~/.dsh/profile-data/reader/service.log`、`service.json`。
 - 每次启动 DSH 都会生成新的带 token 的地址。浏览器第一次用这个地址进来后会记住登录，之后直接开 `http://127.0.0.1:30160/` 也行，重启后刷新页面就能连上。

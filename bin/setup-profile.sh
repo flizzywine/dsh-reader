@@ -26,7 +26,7 @@ fi
 # plugin/cordis.patch.yml so it does not collide with tavern's pocket on 3081.
 POCKET_VERSION=2.12.0
 
-cat > "$PROFILE/package.json" <<JSON
+BASE=$(cat <<JSON
 {
   "name": "dsh-profile-reader",
   "private": true,
@@ -39,6 +39,23 @@ cat > "$PROFILE/package.json" <<JSON
   }
 }
 JSON
+)
+# Plugins added to the profile since (dsh plugin --profile reader add …, e.g. dsh-codex-subscription)
+# are kept: their dependencies stay, and their bundles stay just before dsh-reader so the reader's own
+# UI still comes last.
+BASE="$BASE" node -e '
+  const { readFileSync, writeFileSync } = require("node:fs")
+  const file = process.argv[1]
+  const next = JSON.parse(process.env.BASE)
+  let old = {}
+  try { old = JSON.parse(readFileSync(file, "utf8")) } catch {}
+  const managed = new Set(["dsh-pocket", "dsh-reader", "dsh-dream-skin"])
+  for (const [name, spec] of Object.entries(old.dependencies ?? {})) if (!managed.has(name)) next.dependencies[name] = spec
+  const bundles = next.dsh.profile.bundles
+  const extra = (old.dsh?.profile?.bundles ?? []).filter((b) => !bundles.includes(b) && !managed.has(b))
+  bundles.splice(bundles.indexOf("dsh-reader"), 0, ...extra)
+  writeFileSync(file, JSON.stringify(next, null, 2) + "\n")
+' "$PROFILE/package.json"
 [ -f "$PROFILE/cordis.yml" ] || printf '[]\n' > "$PROFILE/cordis.yml"
 [ -f "$PROFILE/cordis.patch.yml" ] || printf '[]\n' > "$PROFILE/cordis.patch.yml"
 ln -sfn "$ROOT/plugin" "$PROFILE/node_modules/dsh-reader"
