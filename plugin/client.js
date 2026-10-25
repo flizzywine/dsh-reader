@@ -317,6 +317,16 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 .dr-gf-heading{padding:6px 10px 2px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
 .dr-persona-row small{font-size:11px;padding:1px 6px;border-radius:999px;background:color-mix(in srgb,currentColor 8%,transparent)}
 .dr-error{color:#e5484d;font-size:12px;margin:0}
+.dr-ask{box-sizing:border-box;width:min(400px,calc(100vw - 32px));max-height:calc(100vh - 32px);margin:auto;padding:16px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dr-solid,var(--dsw-alias-bg-base));color:var(--dsw-alias-label-primary);box-shadow:0 12px 40px #0003;display:flex;flex-direction:column;gap:12px}
+.dr-ask::backdrop{background:#0006}
+.dr-ask-title{font-size:15px;font-weight:600}
+.dr-ask-message{margin:0;font-size:13px;line-height:1.6;color:var(--dsw-alias-label-secondary);white-space:pre-wrap}
+.dr-ask-input{box-sizing:border-box;width:100%;height:36px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:var(--dsw-specific-input-major,transparent);color:inherit;font:inherit;font-size:14px;outline:none}
+.dr-ask-input:focus{border-color:var(--dsw-alias-brand-primary)}
+.dr-ask-actions{display:flex;justify-content:flex-end;gap:8px}
+.dr-ask-ok{background:var(--dsw-alias-brand-primary);color:#fff}
+.dr-ask-ok:disabled{opacity:.45;cursor:default}
+.dr-ask-danger{background:#c0392b}
 .dr-persona{height:100%;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px;color:var(--dsw-alias-label-primary)}
 .dr-persona textarea{flex:1;min-height:240px;resize:vertical;font:inherit;font-size:13px;line-height:1.6;color:inherit;background:var(--dsw-alias-bg-module-platform);border:none;border-radius:10px;padding:12px}
 .dr-persona-actions{display:flex;gap:8px;justify-content:flex-end}
@@ -468,12 +478,72 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         error ? h('p', { className: 'dr-error' }, error) : null)
     }
 
+    /**
+     * In-app dialog standing in for window.prompt / confirm / alert, like tavern's askTavernText:
+     * the desktop app (Electron) has no window.prompt at all, and the browser's boxes look foreign.
+     * `kind` 'text' resolves to the trimmed text or null; 'confirm' to true/false; 'tell' when closed.
+     */
+    function ask(kind, { title, message = '', initialValue = '', placeholder = '', maxLength = 40, confirmText = '确定', danger = false } = {}) {
+      return new Promise((resolve) => {
+        const dialog = document.createElement('dialog')
+        dialog.className = 'dr-ask'
+        const make = (tag, className, text) => {
+          const el = document.createElement(tag)
+          if (className) el.className = className
+          if (text) el.textContent = text
+          return el
+        }
+        const head = make('div', 'dr-ask-title', title ?? (kind === 'confirm' ? '确认操作' : '提示'))
+        dialog.append(head)
+        if (message) dialog.append(make('p', 'dr-ask-message', message))
+        const input = kind === 'text' ? Object.assign(make('input', 'dr-ask-input'), { type: 'text', value: initialValue, placeholder, maxLength, autocomplete: 'off', spellcheck: false }) : null
+        if (input) dialog.append(input)
+        const actions = make('div', 'dr-ask-actions')
+        const cancel = kind === 'tell' ? null : Object.assign(make('button', 'dr-btn dr-btn-line', '取消'), { type: 'button' })
+        const ok = Object.assign(make('button', 'dr-btn dr-ask-ok' + (danger ? ' dr-ask-danger' : ''), kind === 'tell' ? '知道了' : confirmText), { type: 'button' })
+        if (cancel) actions.append(cancel)
+        actions.append(ok)
+        dialog.append(actions)
+        let settled = false
+        const finish = (value) => {
+          if (settled) return
+          settled = true
+          if (dialog.open) dialog.close()
+          dialog.remove()
+          resolve(value)
+        }
+        const no = kind === 'text' ? null : kind === 'confirm' ? false : undefined
+        const yes = () => {
+          if (kind === 'text') { const value = input.value.trim(); if (value) finish(value) }
+          else finish(kind === 'confirm' ? true : undefined)
+        }
+        const sync = () => { if (input) ok.disabled = !input.value.trim() }
+        input?.addEventListener('input', sync)
+        input?.addEventListener('keydown', (e) => {
+          // 229: the key belongs to the input method (picking a candidate), not a submit.
+          if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); yes() }
+        })
+        cancel?.addEventListener('click', () => finish(no))
+        ok.addEventListener('click', yes)
+        dialog.addEventListener('click', (e) => { if (e.target === dialog) finish(no) })
+        dialog.addEventListener('cancel', (e) => { e.preventDefault(); finish(no) })
+        document.body.append(dialog)
+        sync()
+        dialog.showModal()
+        if (input) { input.focus(); input.select() } else ok.focus()
+      })
+    }
+    const askText = (options) => ask('text', options)
+    const askConfirm = (message, options) => ask('confirm', { ...options, message })
+    const tell = (message) => ask('tell', { message })
+    const failed = (e) => tell(String(e?.message ?? e))
+
     const ALL = '\u0000all'
     const UNGROUPED = '\u0000none'
 
     /** Run a 书库 change, then re-read the library; failures are shown as an alert, as elsewhere. */
-    const libraryWork = (app, work) => work.then(() => app.libraryChanged.bump(), (e) => window.alert(String(e?.message ?? e)))
-    const askGroupName = (current = '') => window.prompt(current ? '新的分组名' : '新分组的名字（比如：八字、周易、佛学）', current)?.trim()
+    const libraryWork = (app, work) => work.then(() => app.libraryChanged.bump(), failed)
+    const askGroupName = (current = '') => askText({ title: current ? '重命名分组' : '新建分组', initialValue: current, placeholder: '比如：八字、周易、佛学', maxLength: 20, confirmText: current ? '重命名' : '创建' })
 
     /** Open state for a dropdown in `ref`, closed by a press anywhere outside it. */
     function useDropdown(ref) {
@@ -502,9 +572,9 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         open ? h('div', { className: 'dr-gf-menu', role: 'menu' },
           h('div', { className: 'dr-gf-options' }, [ALL, UNGROUPED, ...groups].map(option)),
           h('div', { className: 'dr-gf-footer' },
-            h('button', { type: 'button', onClick: () => {
+            h('button', { type: 'button', onClick: async () => {
               setOpen(false)
-              const name = askGroupName()
+              const name = await askGroupName()
               if (name) libraryWork(app, app.rpc('group-create', { name }).then(() => onChange(name)))
             } }, '＋ 创建分组'),
             h('button', { type: 'button', onClick: () => { setOpen(false); onManage() } }, '管理分组'))) : null)
@@ -520,16 +590,16 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           groups.length === 0 ? h('p', { className: 'dr-note' }, '还没有分组。') : groups.map((g) => h('div', { key: g, className: 'dr-gm-row' },
             h('span', null, g),
             h(GroupPersona, { app, group: g, personas }),
-            h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => {
-              const to = askGroupName(g)
+            h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: async () => {
+              const to = await askGroupName(g)
               if (to && to !== g) libraryWork(app, app.rpc('group-rename', { from: g, to }))
             } }, '重命名'),
-            h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', onClick: () => {
-              if (window.confirm(`删除分组「${g}」？里面的书会变成未分组，书本身不动。`)) libraryWork(app, app.rpc('group-delete', { name: g }))
+            h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', onClick: async () => {
+              if (await askConfirm(`删除分组「${g}」？里面的书会变成未分组，书本身不动。`, { confirmText: '删除', danger: true })) libraryWork(app, app.rpc('group-delete', { name: g }))
             } }, '删除'))),
           h('div', { className: 'dr-row' },
-            h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => {
-              const name = askGroupName()
+            h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: async () => {
+              const name = await askGroupName()
               if (name) libraryWork(app, app.rpc('group-create', { name }))
             } }, '＋ 创建分组'),
             h('button', { type: 'button', className: 'dr-btn dr-btn-line', onClick: () => { onClose(); onBatch() } }, '批量整理书籍')))), document.body)
@@ -555,11 +625,11 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         return next
       })
       const allPicked = batch && shown.length > 0 && shown.every((b) => batch.has(b.id))
-      function move(event) {
+      async function move(event) {
         let target = event.target.value
         event.target.value = ''
         if (!target || batch.size === 0) return
-        if (target === '\u0000new') target = askGroupName()
+        if (target === '\u0000new') target = await askGroupName()
         if (!target) return
         libraryWork(app, app.rpc('book-group', { bookIds: [...batch], group: target === UNGROUPED ? '' : target }).then(() => setBatch(new Set())))
       }
@@ -613,7 +683,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         className: 'dr-bd-group', icon: 'folder', label: book.group || '未分组', title: '书库分组', value: book.group ?? '',
         options: [{ value: '', label: '未分组' }, ...groups.map((g) => ({ value: g, label: g }))],
         onPick: move,
-        footer: [{ label: '＋ 新建分组', run: () => { const name = askGroupName(); if (name) move(name) } }],
+        footer: [{ label: '＋ 新建分组', run: async () => { const name = await askGroupName(); if (name) move(name) } }],
       })
     }
 
@@ -639,7 +709,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         label: value === FOLLOW_DEFAULT ? '跟随默认' : name(value) ?? '跟随默认',
         options,
         onPick: (id) => app.rpc('persona', { action: 'bind', group, id: id === FOLLOW_DEFAULT ? null : id })
-          .then(() => app.personasChanged.bump(), (e) => window.alert(String(e?.message ?? e))),
+          .then(() => app.personasChanged.bump(), failed),
       })
     }
 
@@ -770,7 +840,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     /**
      * Persona library view, refreshed whenever it changes anywhere. A failed read (the host
      * restarting, say) is retried every few seconds instead of leaving the page on 读取中 for good;
-     * `error` says why meanwhile.
+     * `error` says why meanwhile. `replace(view)` takes a view a change already returned, so the
+     * page need not wait for the re-read.
      */
     function usePersonas(app) {
       const version = useSignal(app.personasChanged)
@@ -786,7 +857,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         load()
         return () => { live = false; clearTimeout(timer) }
       }, [version])
-      return state
+      return { ...state, replace: (view) => setState({ view, error: null }) }
     }
 
     /**
@@ -794,23 +865,24 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      * what (the default, then each 书库 group) and every persona as a card; a card opens its detail.
      */
     function PersonaTab({ app }) {
-      const { view: personas, error } = usePersonas(app)
+      const { view: personas, error, replace } = usePersonas(app)
       const { books, groups } = useLibrary(app)
       const [detail, setDetail] = useState(null)
       const [notice, setNotice] = useState('')
       if (personas === null) return h('div', { className: 'dr-persona' }, error ? h('p', { className: 'dr-error' }, `读取失败：${error}。几秒后自动重试。`) : h('p', { className: 'dr-note' }, '读取中…'))
       const shown = detail && personas.items.find((item) => item.id === detail)
-      if (shown) return h(PersonaDetail, { app, personas, groups, persona: shown, onBack: () => setDetail(null), onOpen: setDetail })
+      if (shown) return h(PersonaDetail, { app, personas, groups, persona: shown, onBack: () => setDetail(null), onOpen: setDetail, onView: replace })
       // Where each persona is used: 默认 and the groups bound to it.
       const usedBy = (id) => [...(personas.activeId === id ? ['默认'] : []), ...groups.filter((g) => personas.groups[g] === id)]
-      const select = (id) => app.rpc('persona', { action: 'select', id }).then(() => app.personasChanged.bump(), (e) => window.alert(String(e?.message ?? e)))
+      const select = (id) => app.rpc('persona', { action: 'select', id }).then(() => app.personasChanged.bump(), failed)
       async function create() {
-        const name = window.prompt('新性格的名字（比如：命理老师、讲经法师）')?.trim()
+        const name = await askText({ title: '新建性格', placeholder: '比如：命理老师、讲经法师', maxLength: 20, confirmText: '创建' })
         if (!name) return
         try {
           const view = await app.rpc('persona', { action: 'create', name })
-          app.personasChanged.bump()
+          replace(view)
           setDetail(view.items.at(-1).id)
+          app.personasChanged.bump()
         } catch (e) { setNotice(String(e?.message ?? e)) }
       }
       const preview = (text) => text.split('\n').map((line) => line.replace(/^[#>*\-\s]+/, '').trim()).find((line) => line && !/^你的(身份|风格)$/.test(line)) ?? ''
@@ -844,19 +916,20 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     }
 
     /** One persona: where it is used, 设为默认 / 复制 / 重命名 / 删除, and its text to edit. */
-    function PersonaDetail({ app, personas, groups, persona, onBack, onOpen }) {
+    function PersonaDetail({ app, personas, groups, persona, onBack, onOpen, onView }) {
       const [draft, setDraft] = useState(null)
       const [notice, setNotice] = useState('')
       const [busy, setBusy] = useState(false)
       useEffect(() => { setDraft(null); setNotice('') }, [persona.id])
       const text = draft ?? persona.text
       const dirty = draft !== null && draft !== persona.text
-      const discard = () => !dirty || window.confirm('有未保存的修改，继续会丢弃这些修改。是否继续？')
+      const discard = async () => !dirty || askConfirm('有未保存的修改，继续会丢弃这些修改。是否继续？', { confirmText: '丢弃' })
       async function manage(payload, message, then) {
-        if (payload.action !== 'save' && !discard()) return
+        if (payload.action !== 'save' && !await discard()) return
         setBusy(true)
         try {
           const view = await app.rpc('persona', payload)
+          onView(view)
           setDraft(null)
           setNotice(message)
           app.personasChanged.bump()
@@ -867,25 +940,25 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const boundGroups = groups.filter((g) => personas.groups[g] === persona.id)
       const used = [...(isDefault ? ['默认性格'] : []), ...boundGroups.map((g) => `分组「${g}」`)]
       return h('div', { className: 'dr-persona' },
-        h('button', { type: 'button', className: 'dr-back', onClick: () => discard() && onBack() }, h(Icon, { name: 'left', size: 14 }), '工作台性格'),
+        h('button', { type: 'button', className: 'dr-back', onClick: async () => { if (await discard()) onBack() } }, h(Icon, { name: 'left', size: 14 }), '工作台性格'),
         h('header', { className: 'dr-bd-head' },
           h('h3', null, persona.name),
           h('p', null, [persona.builtin ? (persona.modified ? '内置 · 已修改' : '内置') : '我的', used.length ? `在用：${used.join('、')}` : '没在用'].join(' · '))),
         h('div', { className: 'dr-row dr-ps-actions' },
           isDefault ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy, onClick: () => manage({ action: 'select', id: persona.id }, '已设为默认性格。') }, '设为默认'),
           h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy, onClick: () => manage({ action: 'copy', id: persona.id }, '已复制。', (view) => onOpen(view.items.at(-1).id)) }, '复制'),
-          persona.builtin ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy, onClick: () => {
-            const name = window.prompt('新的名字', persona.name)?.trim()
+          persona.builtin ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy, onClick: async () => {
+            const name = await askText({ title: '重命名性格', initialValue: persona.name, maxLength: 20, confirmText: '重命名' })
             if (name && name !== persona.name) manage({ action: 'rename', id: persona.id, name }, '已重命名。')
           } }, '重命名'),
-          persona.builtin ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', disabled: busy, onClick: () => {
+          persona.builtin ? null : h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', disabled: busy, onClick: async () => {
             const note = used.length ? `\n${used.join('、')}会改回默认。` : ''
-            if (window.confirm(`删除性格「${persona.name}」？删除后不能恢复。${note}`)) manage({ action: 'delete', id: persona.id }, '', onBack)
+            if (await askConfirm(`删除性格「${persona.name}」？删除后不能恢复。${note}`, { confirmText: '删除', danger: true })) manage({ action: 'delete', id: persona.id }, '', onBack)
           } }, '删除')),
         h('div', { className: 'dr-ps-label' }, '内容'),
         h('textarea', { value: text, disabled: busy, 'aria-label': '性格内容', onChange: (e) => { setDraft(e.target.value); setNotice('') } }),
         h('div', { className: 'dr-persona-actions' },
-          persona.builtin ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy || !persona.modified, onClick: () => window.confirm(`把「${persona.name}」恢复为内置的默认内容？你的修改会丢失。`) && manage({ action: 'restore', id: persona.id }, '已恢复默认内容。') }, '恢复默认') : null,
+          persona.builtin ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy || !persona.modified, onClick: async () => { if (await askConfirm(`把「${persona.name}」恢复为内置的默认内容？你的修改会丢失。`, { confirmText: '恢复' })) manage({ action: 'restore', id: persona.id }, '已恢复默认内容。') } }, '恢复默认') : null,
           h('button', { type: 'button', className: 'dr-btn', disabled: busy || !dirty, onClick: () => manage({ action: 'save', id: persona.id, text }, '已保存，从下一次请求开始生效。') }, '保存')),
         notice ? h('p', { className: 'dr-note' }, notice) : null)
     }
@@ -988,7 +1061,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       // 笔记 = notes about the whole book + notes on highlights.
       const notes = highlights?.filter((m) => m.note) ?? null
       const bookNotes = marks?.notes ?? []
-      const changed = (work) => work.then(() => app.marksChanged.bump(), (e) => window.alert(String(e?.message ?? e)))
+      const changed = (work) => work.then(() => app.marksChanged.bump(), failed)
       const saveNote = (id, note) => changed(app.rpc('book-note-save', { bookId: book.id, id, note, chapter: reading ? binding.chapter ?? 0 : null }))
       const removeNote = (id) => changed(app.rpc('book-note-remove', { bookId: book.id, id }))
       const toggle = (index) => setOpen((set) => {
@@ -1340,7 +1413,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const text = useRef(null)
       const blank = !value.trim()
       const dirty = value !== initial
-      const close = () => { if (!dirty || window.confirm('还没保存，确定不要了？')) onClose() }
+      const close = async () => { if (!dirty || await askConfirm('还没保存，确定不要了？', { confirmText: '不要了' })) onClose() }
       const save = () => { if (!blank) onSave(value) }
       // Grow with the text up to the sheet's height, so long thoughts are not read through a slot.
       useEffect(() => {
@@ -1397,7 +1470,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             h('div', { className: 'dr-booknote-foot' },
               h('span', null, noteMeta(n)),
               h('button', { type: 'button', onClick: () => setEditing(n.id) }, '修改'),
-              h('button', { type: 'button', onClick: () => { if (window.confirm('删除这条随想？')) remove(n.id) } }, '删除')))))
+              h('button', { type: 'button', onClick: async () => { if (await askConfirm('删除这条随想？', { confirmText: '删除', danger: true })) remove(n.id) } }, '删除')))))
     }
 
     /** 笔记: notes about the whole book first, then every highlight in reading order, grouped by chapter. */
@@ -1758,7 +1831,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         const uiWorkspace = () => { try { return ctx.get('uiWorkspace') } catch { return undefined } }
         // The right column is per session; with no session open there is nowhere to put a page.
         const openPage = (kind, sessionId) => {
-          if (sessionId === undefined) return window.alert('先选一本书开始阅读，再打开这个页面。')
+          if (sessionId === undefined) return tell('先选一本书开始阅读，再打开这个页面。')
           ctx.sidebarRight.openTab(kind)
         }
 
@@ -1803,7 +1876,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
               input.setDraft(draft.trim() ? `${draft.replace(/\s*$/, '')}\n\n${block}` : block)
             } catch (error) {
               console.warn('dsh-reader: ask agent failed', error)
-              window.alert('没能放进输入框，请复制后自己粘贴。')
+              tell('没能放进输入框，请复制后自己粘贴。')
             }
             app.openChat()
           },
@@ -1814,7 +1887,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
               if (!result?.ok) throw new Error(result?.error?.message ?? '发送失败')
             } catch (error) {
               console.warn('dsh-reader: send prompt failed', error)
-              window.alert(`没能发送：${error.message}`)
+              tell(`没能发送：${error.message}`)
             }
           },
           /** Tavern's 新开游玩, for books: a fresh session in the library workspace, bound before it opens. */
