@@ -1,5 +1,6 @@
 // 工作台性格: the reading companion's system text, chosen globally like tavern's card workbench.
-// Built-in texts ship in prompts/personas/; the user's choice and edits live in data/settings.json.
+// Built-in texts ship in prompts/personas/; the user's choice, edits and own personas live in
+// data/settings.json.
 import { readFileSync } from 'node:fs'
 
 const DIRECTORY = new URL('./prompts/personas/', import.meta.url)
@@ -11,17 +12,36 @@ export const BUILTIN_PERSONAS = Object.freeze([
   ['roaster', '毒舌吐槽役 · 阿刺'],
 ].map(([id, name]) => Object.freeze({ id, name, text: readFileSync(new URL(`${id}.md`, DIRECTORY), 'utf8').trim() })))
 
-/** Settings shape: `{ activeId: '' | id, edits: { [id]: text } }`; blank activeId means no persona. */
+/** Text a new persona starts with, for the user to fill in. */
+const NEW_PERSONA_TEXT = `# 你的身份
+
+你是……（写下这位陪读者是谁、懂什么）
+
+# 你的风格
+
+- 怎么说话：
+- 重点关注：
+- 不要做的事：`
+
+/**
+ * Settings shape: `{ activeId: '' | id, edits: { [id]: text }, custom: [{ id, name, text }] }`;
+ * blank activeId means no persona. Built-ins can be edited and restored; custom ones are the user's
+ * own and can be renamed and deleted.
+ */
 export function personaView(settings) {
   const edits = settings.edits ?? {}
   return {
     activeId: settings.activeId ?? '',
-    items: BUILTIN_PERSONAS.map((item) => ({
-      id: item.id,
-      name: item.name,
-      text: edits[item.id] ?? item.text,
-      modified: edits[item.id] !== undefined && edits[item.id] !== item.text,
-    })),
+    items: [
+      ...BUILTIN_PERSONAS.map((item) => ({
+        id: item.id,
+        name: item.name,
+        text: edits[item.id] ?? item.text,
+        builtin: true,
+        modified: edits[item.id] !== undefined && edits[item.id] !== item.text,
+      })),
+      ...(settings.custom ?? []).map((item) => ({ id: item.id, name: item.name, text: item.text, builtin: false, modified: false })),
+    ],
   }
 }
 
@@ -30,14 +50,34 @@ export function activePersonaText(settings) {
   return view.items.find((item) => item.id === view.activeId)?.text ?? ''
 }
 
-/** Apply one `select | save | restore` action and return the next settings. */
-export function managePersona(settings, { action, id, text }) {
-  const known = BUILTIN_PERSONAS.some((item) => item.id === id)
+function personaName(name) {
+  const clean = String(name ?? '').replace(/\s+/g, ' ').trim()
+  if (!clean) throw new Error('性格名不能为空')
+  if (clean.length > 20) throw new Error('性格名最多 20 个字')
+  return clean
+}
+
+/**
+ * Apply one `select | save | restore | create | rename | delete` action and return the next
+ * settings. `create` also selects the new persona.
+ */
+export function managePersona(settings, { action, id, text, name }) {
+  const custom = settings.custom ?? []
+  const builtin = BUILTIN_PERSONAS.some((item) => item.id === id)
+  const own = custom.some((item) => item.id === id)
+  if (action === 'create') {
+    const item = { id: `c${Date.now().toString(36)}`, name: personaName(name), text: String(text ?? NEW_PERSONA_TEXT) }
+    return { ...settings, custom: [...custom, item], activeId: item.id }
+  }
   if (action === 'select') {
-    if (id !== '' && !known) throw new Error(`unknown persona: ${id}`)
+    if (id !== '' && !builtin && !own) throw new Error(`unknown persona: ${id}`)
     return { ...settings, activeId: id }
   }
-  if (!known) throw new Error(`unknown persona: ${id}`)
+  if (!builtin && !own) throw new Error(`unknown persona: ${id}`)
+  if (action === 'save' && own) return { ...settings, custom: custom.map((item) => item.id === id ? { ...item, text: String(text ?? '') } : item) }
+  if (action === 'rename' && own) return { ...settings, custom: custom.map((item) => item.id === id ? { ...item, name: personaName(name) } : item) }
+  if (action === 'delete' && own) return { ...settings, custom: custom.filter((item) => item.id !== id), activeId: settings.activeId === id ? '' : settings.activeId }
+  if (!builtin) throw new Error(`内置性格才能「${action}」`)
   const edits = { ...settings.edits }
   if (action === 'save') edits[id] = String(text ?? '')
   else if (action === 'restore') delete edits[id]

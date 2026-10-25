@@ -714,7 +714,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return view
     }
 
-    /** Right Sidebar 工作台性格 page: pick one of tavern's built-ins (or blank) and edit its text. */
+    /** Right Sidebar 工作台性格 page: pick a built-in, one of the user's own or blank; edit, add, rename, delete. */
     function PersonaTab({ app }) {
       const view = usePersonas(app)
       const [draft, setDraft] = useState(null)
@@ -741,12 +741,25 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         h('select', {
           value: view.activeId, disabled: busy,
           onChange: (e) => manage({ action: 'select', id: e.target.value }, e.target.value ? '已切换性格。' : '已切换为空白。'),
-        }, h('option', { value: '' }, '空白（不带性格）'), view.items.map((item) => h('option', { key: item.id, value: item.id }, item.name + (item.modified ? '（已修改）' : '')))),
+        }, h('option', { value: '' }, '空白（不带性格）'),
+          h('optgroup', { label: '内置' }, view.items.filter((item) => item.builtin).map((item) => h('option', { key: item.id, value: item.id }, item.name + (item.modified ? '（已修改）' : '')))),
+          view.items.some((item) => !item.builtin) ? h('optgroup', { label: '我的' }, view.items.filter((item) => !item.builtin).map((item) => h('option', { key: item.id, value: item.id }, item.name))) : null),
+        h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy, style: { alignSelf: 'flex-start' }, onClick: () => {
+          const name = window.prompt('新性格的名字（比如：命理老师、讲经法师）')?.trim()
+          if (name) manage({ action: 'create', name }, `已新建「${name}」并切换过去。写好性格内容后点保存。`)
+        } }, '＋ 新建性格'),
         active === null ? h('p', { className: 'dr-note' }, '当前为空白：Agent 不带自定义性格。')
           : h(React.Fragment, null,
             h('textarea', { value: text, disabled: busy, 'aria-label': '性格内容', onChange: (e) => { setDraft(e.target.value); setNotice('') } }),
             h('div', { className: 'dr-persona-actions' },
-              h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy || !active.modified, onClick: () => window.confirm(`把「${active.name}」恢复为内置的默认内容？你的修改会丢失。`) && manage({ action: 'restore', id: active.id }, '已恢复默认内容。') }, '恢复默认'),
+              active.builtin
+                ? h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy || !active.modified, onClick: () => window.confirm(`把「${active.name}」恢复为内置的默认内容？你的修改会丢失。`) && manage({ action: 'restore', id: active.id }, '已恢复默认内容。') }, '恢复默认')
+                : h(React.Fragment, null,
+                  h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', disabled: busy, onClick: () => window.confirm(`删除性格「${active.name}」？删除后不能恢复。`) && manage({ action: 'delete', id: active.id }, '已删除，当前为空白。') }, '删除'),
+                  h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: busy, onClick: () => {
+                    const name = window.prompt('新的名字', active.name)?.trim()
+                    if (name && name !== active.name) manage({ action: 'rename', id: active.id, name }, '已重命名。')
+                  } }, '重命名')),
               h('button', { type: 'button', className: 'dr-btn', disabled: busy || !dirty, onClick: () => manage({ action: 'save', id: active.id, text }, '已保存，从下一次请求开始生效。') }, '保存'))),
         notice ? h('p', { className: 'dr-note' }, notice) : null)
     }
