@@ -243,7 +243,6 @@ function nextBinding(previous = {}, patch) {
 
 /** Change counter per session, so the reader page can long-poll for moves made by the agent. */
 const versions = new Map()
-const waiters = new Map()
 
 /** The one writer of bindings: the page, the agent's show_passage, and closing a book all go through here. */
 let writing = Promise.resolve()
@@ -255,26 +254,21 @@ function updateBinding(sessionId, patch) {
     await writeJsonFile(BINDINGS, all)
     const version = (versions.get(sessionId) ?? 0) + 1
     versions.set(sessionId, version)
-    for (const wake of waiters.get(sessionId) ?? []) wake()
-    waiters.delete(sessionId)
     return all[sessionId] ?? null
   })
   writing = work.catch(() => {})
   return work
 }
 
-/** Resolve once the session's binding moves past `version`, or after 25s with no change. */
+/**
+ * The session's binding if it moved past `version` (the page polls this every few seconds). It
+ * answers at once: a long poll held one of the browser's six connections per site for each open
+ * page, so with several pages open every other request queued behind them.
+ */
 async function watchBinding(sessionId, version) {
   const current = versions.get(sessionId) ?? 0
-  if (version === undefined || version !== current) return { version: current, binding: (await readBindings())[sessionId] ?? null, changed: version !== undefined }
-  await new Promise((resolve) => {
-    const timer = setTimeout(resolve, 25000)
-    const list = waiters.get(sessionId) ?? []
-    list.push(() => { clearTimeout(timer); resolve() })
-    waiters.set(sessionId, list)
-  })
-  const latest = versions.get(sessionId) ?? 0
-  return { version: latest, binding: (await readBindings())[sessionId] ?? null, changed: latest !== version }
+  if (version !== undefined && version === current) return { version: current, changed: false }
+  return { version: current, binding: (await readBindings())[sessionId] ?? null, changed: version !== undefined }
 }
 
 /**

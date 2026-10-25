@@ -1747,26 +1747,31 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       return h(ReaderBoundary, { key: props.sessionId }, h(ReaderCentre, props))
     }
 
+    const WATCH_MS = 2000
+
     /** Centre occupant: the reader when the session has a book, otherwise the ordinary Conversation. */
     function ReaderCentre(props) {
       const { sessionId, app } = props
       const binding = useBinding(app.store, sessionId)
 
-      // Follow moves made by the agent (show_passage) while this session is open.
+      // Follow moves made by the agent (show_passage) while this session is open: a short poll every
+      // 2 s, skipped while the page is hidden. Each answer comes at once, so open pages hold no connection.
       useEffect(() => {
         if (sessionId === undefined) return
         const controller = new AbortController()
         ;(async () => {
           let version
           while (!controller.signal.aborted) {
-            try {
-              const result = await app.rpc('watch', { sessionId, version }, controller.signal)
-              if (result.changed) app.store.apply(sessionId, result.binding)
-              version = result.version
-            } catch {
-              if (controller.signal.aborted) return
-              await new Promise((resolve) => setTimeout(resolve, 3000))
+            if (!document.hidden) {
+              try {
+                const result = await app.rpc('watch', { sessionId, version }, controller.signal)
+                if (result.changed) app.store.apply(sessionId, result.binding)
+                version = result.version
+              } catch {
+                if (controller.signal.aborted) return
+              }
             }
+            await new Promise((resolve) => setTimeout(resolve, WATCH_MS))
           }
         })()
         return () => controller.abort()
