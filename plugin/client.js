@@ -512,7 +512,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 
     /** 管理分组 dialog: each group's 工作台性格, rename or delete it, add one, or go sort books in bulk. */
     function GroupManager({ app, groups, onClose, onBatch }) {
-      const personas = usePersonas(app)
+      const { view: personas } = usePersonas(app)
       return createPortal(h('div', { className: 'dr-overlay dr-overlay-top', onPointerDown: (e) => { if (e.target === e.currentTarget) onClose() } },
         h('div', { className: 'dr-dialog dr-gm', role: 'dialog', 'aria-label': '管理分组' },
           h('div', { className: 'dr-dialog-head' }, h('h3', null, '管理分组'), h('button', { type: 'button', className: 'dr-btn', onClick: onClose }, '关闭')),
@@ -705,7 +705,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const [picking, setPicking] = useState(false)
       const [closed, setClosed] = useState(() => new Set())
       const { books } = useLibrary(app)
-      const persona = usePersonas(app)
+      const { view: persona } = usePersonas(app)
       useSignal(app.store.changed)
       const snapshot = useSyncExternalStore(app.sessions.list.subscribe, app.sessions.list.getSnapshot)
       const current = mainSessionId(snapshot)
@@ -767,12 +767,26 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         picking ? h(BookPicker, { app, onClose: () => setPicking(false), onLibrary: () => app.openLibrary(current) }) : null)
     }
 
-    /** Persona library view, refreshed whenever it changes anywhere. */
+    /**
+     * Persona library view, refreshed whenever it changes anywhere. A failed read (the host
+     * restarting, say) is retried every few seconds instead of leaving the page on 读取中 for good;
+     * `error` says why meanwhile.
+     */
     function usePersonas(app) {
       const version = useSignal(app.personasChanged)
-      const [view, setView] = useState(null)
-      useEffect(() => { app.rpc('personas').then(setView) }, [version])
-      return view
+      const [state, setState] = useState({ view: null, error: null })
+      useEffect(() => {
+        let live = true
+        let timer
+        const load = () => app.rpc('personas').then((view) => live && setState({ view, error: null }), (e) => {
+          if (!live) return
+          setState((old) => ({ ...old, error: String(e?.message ?? e) }))
+          timer = setTimeout(load, 3000)
+        })
+        load()
+        return () => { live = false; clearTimeout(timer) }
+      }, [version])
+      return state
     }
 
     /**
@@ -780,11 +794,11 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      * what (the default, then each 书库 group) and every persona as a card; a card opens its detail.
      */
     function PersonaTab({ app }) {
-      const personas = usePersonas(app)
+      const { view: personas, error } = usePersonas(app)
       const { books, groups } = useLibrary(app)
       const [detail, setDetail] = useState(null)
       const [notice, setNotice] = useState('')
-      if (personas === null) return h('div', { className: 'dr-persona' }, h('p', { className: 'dr-note' }, '读取中…'))
+      if (personas === null) return h('div', { className: 'dr-persona' }, error ? h('p', { className: 'dr-error' }, `读取失败：${error}。几秒后自动重试。`) : h('p', { className: 'dr-note' }, '读取中…'))
       const shown = detail && personas.items.find((item) => item.id === detail)
       if (shown) return h(PersonaDetail, { app, personas, groups, persona: shown, onBack: () => setDetail(null), onOpen: setDetail })
       // Where each persona is used: 默认 and the groups bound to it.
