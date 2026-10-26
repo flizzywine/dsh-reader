@@ -234,6 +234,8 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-card-meta{font-size:12px;color:var(--dsw-alias-label-tertiary);margin-top:2px}
 .dr-strip{display:flex;align-items:center;gap:8px;padding:6px 16px;padding-left:max(16px,var(--dsh-frame-leading-clearance,0px));font-size:12px;color:var(--dsw-alias-label-tertiary);flex:none}
 .dr-chat{display:flex;flex-direction:column;height:100%;min-height:0}
+.dr-chat-views{display:flex;flex:none;padding:8px 12px 4px}
+.dr-chat-views .dr-seg button{height:24px;font-size:12px}
 .dr-side{height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:12px;min-height:0;overflow:auto;color:var(--dsw-alias-label-primary);font-size:13px;background:var(--dsw-specific-sidebar-fill)}
 .dr-side-head{height:56px;display:flex;align-items:center;gap:10px;flex:none;margin-right:40px;padding-left:4px}
 .dr-side-mark{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--dsw-alias-button-elevated-fill);border:1px solid var(--dsw-alias-border-l2)}
@@ -1076,13 +1078,33 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         notice ? h('p', { className: 'dr-note' }, notice) : null)
     }
 
+    /**
+     * The right sidebar's view: 对话 (DSH's Chat) or 轨迹 (its Trajectory: every request, injected
+     * note and tool call). The embedded Conversation has no header, so the switch lives in ChatTab.
+     */
+    const chatView = {
+      value: (() => { try { return localStorage.getItem('dsh-reader.chatView') === 'trajectory' ? 'trajectory' : 'chat' } catch { return 'chat' } })(),
+      changed: createSignal(),
+      set(value) {
+        chatView.value = value
+        try { localStorage.setItem('dsh-reader.chatView', value) } catch {}
+        chatView.changed.bump()
+      },
+    }
+
     function FixedChatView(props) {
-      return props.renderSlot('conversation.session', { view: 'chat' })
+      useSignal(chatView.changed)
+      return props.renderSlot('conversation.session', { view: chatView.value })
     }
 
     /** Right Sidebar tab body: the native Conversation, bound to the current session. */
     function ChatTab({ renderSlot }) {
-      return h('div', { className: 'dr-chat' }, renderSlot(CHAT_SLOT, {}))
+      useSignal(chatView.changed)
+      return h('div', { className: 'dr-chat' },
+        h('div', { className: 'dr-chat-views' },
+          h('div', { className: 'dr-seg' }, [['chat', '对话'], ['trajectory', '轨迹']].map(([id, label]) =>
+            h('button', { key: id, type: 'button', 'aria-pressed': chatView.value === id, onClick: () => chatView.set(id) }, label)))),
+        renderSlot(CHAT_SLOT, {}))
     }
 
     function ChatConversation({ sessionId, useSession, useConversation, useSessions, renderFactorySlot }) {
