@@ -69,16 +69,16 @@ def classify(t, prev=None):
 
 
 def heading_title(t):
-    """第X卷 heading text must stay within 30 chars after 第X卷 for the importer."""
+    """The part after 「第X卷 · 」: the importer takes at most 30 chars after 第X卷, the separator included."""
     t = re.sub(r'\s+', '', t).rstrip('。.，,')
     t = t.replace('．', '、')
-    if len(t) <= 28:
+    if len(t) <= 26:
         return t
     for sep in '：，':
         i = t.find(sep)
-        if 0 < i <= 28:
+        if 0 < i <= 26:
             return t[:i]
-    return t[:28]
+    return t[:26]
 
 
 def convert(paras):
@@ -136,12 +136,12 @@ def render(roles):
         if role == '节':
             pending_intro = None
             lines.append('')
-            lines.append(f'第{cn_number(juan)}卷 {heading_title(t)}')
+            lines.append(f'第{cn_number(juan)}卷 · {heading_title(t)}')  # 「卷 · 节」: the reader's 目录 groups by 卷
             continue
         if pending_intro is not None:
             # 卷首 matter before the first 节 (translators, the title explained).
             lines.append('')
-            lines.append(f'第{cn_number(juan)}卷 卷首')
+            lines.append(f'第{cn_number(juan)}卷 · 卷首')
             pending_intro = None
         label = {'白': '白话', '注': '注'}.get(role)
         if label != fold:
