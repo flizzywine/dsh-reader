@@ -2,8 +2,9 @@
 // agent reads one chapter file at a time instead of the whole novel.
 //
 //   library/<书名>/原文.txt / 原文.epub      the imported file, untouched
-//   library/<书名>/目录.json                 { title, group?, chapters: [{ title, file, chars }] }; group is the
-//                                            书库 group the user put the book in
+//   library/<书名>/目录.json                 { title, group?, archived?, chapters: [{ title, file, chars }] }; group is the
+//                                            书库 group the user put the book in; archived hides a
+//                                            finished book from the list without leaving its group
 //   library/分组.json                       { groups: [name] }: the groups in the user's order, so an
 //                                            empty group stays until it is deleted
 //   library/<书名>/章节/0001 第一章 xxx.txt
@@ -217,7 +218,7 @@ export async function listBooks(library) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue
     try {
       const toc = await readToc(library, entry.name)
-      books.push({ id: entry.name, title: toc.title, group: toc.group ?? null, chars: toc.chars, chapters: toc.chapters.length })
+      books.push({ id: entry.name, title: toc.title, group: toc.group ?? null, archived: toc.archived === true, chars: toc.chars, chapters: toc.chapters.length })
     } catch { /* not a book folder */ }
   }
   return books.sort((a, b) => a.title.localeCompare(b.title, 'zh'))
@@ -291,6 +292,16 @@ export async function setGroup(library, ids, group) {
   const groups = await readGroups(library)
   await writeGroups(library, groups)
   return { group: name || null, groups }
+}
+
+/** 归档: a finished book leaves the 书库 list but keeps its group, so 取消归档 puts it back as it was. */
+export async function setArchived(library, ids, archived) {
+  for (const id of ids) {
+    const toc = await readToc(library, id)
+    if (archived) toc.archived = true
+    else delete toc.archived
+    await writeJson(join(library, safeName(id), TOC_FILE), toc)
+  }
 }
 
 function chapterAt(toc, index) {
@@ -440,8 +451,8 @@ export async function reparseBook(library, id, { onProgress } = {}) {
   }
   await rm(join(dir, CHAPTER_DIR), { recursive: true, force: true })
   const toc = await writeBook(library, safeName(id), buffer, book)
-  // writeBook names the book after its folder; keep what the user called it and its group.
-  const next = { ...toc, title: old.title, ...(old.group ? { group: old.group } : {}) }
+  // writeBook names the book after its folder; keep what the user called it, its group and 归档.
+  const next = { ...toc, title: old.title, ...(old.group ? { group: old.group } : {}), ...(old.archived ? { archived: true } : {}) }
   await writeFile(join(dir, TOC_FILE), JSON.stringify(next, null, 2))
 
   const texts = book.parts.map((p) => p.text.replace(/\r\n?/g, '\n'))

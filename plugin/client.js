@@ -576,6 +576,13 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
 
     const ALL = '\u0000all'
     const UNGROUPED = '\u0000none'
+    /** 已归档: not a group but a view of its own; archived books keep their group and leave every other view. */
+    const ARCHIVED = '\u0000archived'
+    /** The card line's tail for an archived book, so search results say why the book is usually hidden. */
+    const archivedTag = (b) => b.archived ? ' · 已归档' : ''
+
+    /** 归档 / 取消归档 one book or several. */
+    const archiveBooks = (app, books, archived) => libraryWork(app, app.rpc('book-archive', { bookIds: books.map((b) => b.id), archived }))
 
     /** Run a 书库 change, then re-read the library; failures are shown as an alert, as elsewhere. */
     const libraryWork = (app, work) => work.then(() => app.libraryChanged.bump(), failed)
@@ -597,8 +604,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     function GroupFilter({ app, books, groups, value, onChange, onManage }) {
       const ref = useRef(null)
       const [open, setOpen] = useDropdown(ref)
-      const count = (group) => books.filter((b) => group === ALL || (b.group ?? UNGROUPED) === group).length
-      const label = (group) => group === ALL ? '全部' : group === UNGROUPED ? '未分组' : group
+      const count = (group) => books.filter((b) => group === ARCHIVED ? b.archived : !b.archived && (group === ALL || (b.group ?? UNGROUPED) === group)).length
+      const label = (group) => group === ALL ? '全部' : group === UNGROUPED ? '未分组' : group === ARCHIVED ? '已归档' : group
       const pick = (group) => { onChange(group); setOpen(false) }
       const option = (group) => h('button', { key: group, type: 'button', 'aria-pressed': value === group, onClick: () => pick(group) },
         label(group), h('em', null, count(group)), h('span', null, value === group ? '✓' : ''))
@@ -606,7 +613,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         h('button', { type: 'button', className: 'dr-gf-summary', 'aria-expanded': open, onClick: () => setOpen(!open) },
           h('span', null, label(value)), h(Icon, { name: open ? 'up' : 'down', size: 14 })),
         open ? h('div', { className: 'dr-gf-menu', role: 'menu' },
-          h('div', { className: 'dr-gf-options' }, [ALL, UNGROUPED, ...groups].map(option)),
+          h('div', { className: 'dr-gf-options' }, [ALL, UNGROUPED, ...groups, ...(count(ARCHIVED) || value === ARCHIVED ? [ARCHIVED] : [])].map(option)),
           h('div', { className: 'dr-gf-footer' },
             h('button', { type: 'button', onClick: async () => {
               setOpen(false)
@@ -652,9 +659,12 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       const [managing, setManaging] = useState(false)
       const [batch, setBatch] = useState(null)
       // A group renamed or deleted elsewhere falls back to 全部.
-      const shownGroup = group === ALL || group === UNGROUPED || groups.includes(group) ? group : ALL
+      const shownGroup = group === ALL || group === UNGROUPED || group === ARCHIVED || groups.includes(group) ? group : ALL
       const q = query.trim().toLowerCase()
-      const shown = books.filter((b) => (shownGroup === ALL || (b.group ?? UNGROUPED) === shownGroup) && (!q || b.title.toLowerCase().includes(q)))
+      // Archived books show under 已归档, and in a search so a finished book is easy to find again.
+      const inView = (b) => shownGroup === ARCHIVED ? b.archived
+        : (!b.archived || q) && (shownGroup === ALL || (b.group ?? UNGROUPED) === shownGroup)
+      const shown = books.filter((b) => inView(b) && (!q || b.title.toLowerCase().includes(q)))
       const toggle = (id) => setBatch((set) => {
         const next = new Set(set)
         next.has(id) ? next.delete(id) : next.add(id)
@@ -682,17 +692,20 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
             groups.map((g) => h('option', { key: g, value: g }, g)),
             h('option', { value: UNGROUPED }, '未分组'),
             h('option', { value: '\u0000new' }, '新建分组…')),
+          h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: batch.size === 0, onClick: () =>
+            archiveBooks(app, books.filter((b) => batch.has(b.id)), shownGroup !== ARCHIVED).then(() => setBatch(new Set())) },
+          shownGroup === ARCHIVED ? '取消归档' : '归档'),
           h('button', { type: 'button', className: 'dr-btn dr-btn-line dr-danger', disabled: batch.size === 0, onClick: async () => {
             if (await deleteBooksFlow(app, books.filter((b) => batch.has(b.id)))) setBatch(new Set())
           } }, '删除'),
           h('button', { type: 'button', className: 'dr-btn', onClick: () => setBatch(null) }, '完成')) : null,
-        h('div', { className: listClass }, shown.length === 0 ? h('p', { className: 'dr-note' }, q ? '没有书名匹配的书。' : '这个分组里还没有书。')
+        h('div', { className: listClass }, shown.length === 0 ? h('p', { className: 'dr-note' }, q ? '没有书名匹配的书。' : shownGroup === ARCHIVED ? '还没有归档的书。读完的书可以在 ⋯ 里归档，书库就不再列出它。' : '这个分组里还没有书。')
           : shown.map((b) => batch
             ? h('label', { key: b.id, className: 'dr-card dr-card-pick' },
               h('input', { type: 'checkbox', checked: batch.has(b.id), onChange: () => toggle(b.id) }),
               h('div', { className: 'dr-card-text' },
                 h('div', { className: 'dr-card-title' }, b.title),
-                h('div', { className: 'dr-card-meta' }, `${b.group ?? '未分组'} · ${b.chars.toLocaleString()} 字 · ${b.chapters} 节`)))
+                h('div', { className: 'dr-card-meta' }, `${b.group ?? '未分组'} · ${b.chars.toLocaleString()} 字 · ${b.chapters} 节${archivedTag(b)}`)))
             : card(b))),
         managing ? h(GroupManager, { app, groups, onClose: () => setManaging(false), onBatch: () => setBatch(new Set()) }) : null)
     }
@@ -849,7 +862,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                 : h(BookBrowser, { app, books, groups, listClass: 'dr-dialog-list', card: (b) => h('div', { key: b.id, className: 'dr-card' },
                     h('div', { className: 'dr-card-text' },
                       h('div', { className: 'dr-card-title' }, b.title),
-                      h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`)),
+                      h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节${archivedTag(b)}`)),
                     h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: starting !== null, onClick: () => start(b.id) },
                       starting === b.id ? '正在打开…' : '开始阅读')) }))), document.body)
     }
@@ -872,6 +885,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       more: 'M5 10h.01M10 10h.01M15 10h.01',
       refresh: 'M15.5 8A6 6 0 0 0 4.6 7M4.5 12a6 6 0 0 0 10.9 1M15.5 4v4h-4M4.5 16v-4h4',
       trash: 'M4 6h12M8 6V4.5h4V6M6 6l.7 10h6.6L14 6M8.5 9v4.5M11.5 9v4.5',
+      archive: 'M3 4.5h14v3H3zM4.5 7.5V16h11V7.5M8 10.5h4',
       check: 'M4.5 10.5 8 14l7.5-8',
       up: 'M5 12.5 10 7.5l5 5',
       down: 'M5 7.5 10 12.5l5-5',
@@ -1224,7 +1238,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         h('button', { type: 'button', className: 'dr-back', onClick: onBack }, h(Icon, { name: 'left', size: 14 }), '书库'),
         h('header', { className: 'dr-bd-head' },
           h('h3', null, book.title),
-          h('p', null, `${formatChars(book.chars)} · ${book.chapters} 节`),
+          h('p', null, `${formatChars(book.chars)} · ${book.chapters} 节${archivedTag(book)}`),
           h(GroupSelect, { app, book, groups }),
           reading ? h('div', { className: 'dr-bd-progress' },
             h('div', null, h('span', null, `读到第 ${(binding.chapter ?? 0) + 1} 节`), h('span', null, `${progress}%`)),
@@ -1285,6 +1299,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       // ⋯ on a card and on the book's page: rename, show the folder, delete.
       const bookMenu = (b) => [
         { label: '重命名', icon: 'pen', onClick: async () => { const id = await renameBookFlow(app, b); if (id && detail === b.id) setDetail(id) } },
+        { label: b.archived ? '取消归档' : '归档', icon: 'archive', onClick: () => archiveBooks(app, [b], !b.archived) },
         { label: '重新排版', icon: 'refresh', onClick: () => reparseBookFlow(app, b) },
         { label: '在访达中显示', icon: 'folder', onClick: () => app.rpc('reveal', { bookId: b.id }).catch(failed) },
         { label: '删除', icon: 'trash', danger: true, onClick: async () => { if (await deleteBooksFlow(app, [b]) && detail === b.id) setDetail(null) } },
@@ -1304,7 +1319,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
                 h('button', { type: 'button', className: 'dr-card-text dr-card-link', title: '看详情和总结', onClick: () => setDetail(b.id) },
                   h('div', { className: 'dr-card-title' }, (b.id === current ? '✓ ' : '') + b.title),
                   h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节`
-                    + (b.id === current ? ` · 读到第 ${(binding.chapter ?? 0) + 1} 节` : ''))),
+                    + (b.id === current ? ` · 读到第 ${(binding.chapter ?? 0) + 1} 节` : '') + archivedTag(b))),
                 b.id === current ? h('span', { className: 'dr-note' }, '在读') : null,
                 h(MoreMenu, { items: bookMenu(b) })) }))
     }

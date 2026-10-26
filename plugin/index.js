@@ -5,7 +5,7 @@ import { dirname, join, extname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, setGroup, renameBook, bookContents, trashBook, reparseBook, readGroups, createGroup, renameGroup, deleteGroup, BOOK_TYPES } from './books.js'
+import { CHAPTER_DIR, SUMMARY_DIR, addHighlight, listBooks, readBookNotes, readHighlights, updateHighlights, migrateFlatBooks, readChapter, readSummary, readToc, safeName, summarized, summaryFile, writeBook, parseBook, setGroup, setArchived, renameBook, bookContents, trashBook, reparseBook, readGroups, createGroup, renameGroup, deleteGroup, BOOK_TYPES } from './books.js'
 import { managePersona, moveGroupPersona, personaFor, personaView } from './personas.js'
 import { readingTools } from './tools.js'
 import { RANGES, cleanSymbol, stockData, stockTools } from './stocks.js'
@@ -156,6 +156,8 @@ async function handleCall(endpoint, payload = {}) {
     }
     case 'book-group':
       return setGroup(LIBRARY, payload.bookIds ?? [payload.bookId], payload.group)
+    case 'book-archive':
+      return setArchived(LIBRARY, payload.bookIds ?? [payload.bookId], payload.archived !== false)
     case 'toc': {
       const toc = await readToc(LIBRARY, payload.bookId)
       const done = await summarized(LIBRARY, payload.bookId)
