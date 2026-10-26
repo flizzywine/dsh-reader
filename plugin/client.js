@@ -104,6 +104,13 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-text h2{font-size:1.4em;line-height:1.4;font-weight:600;margin:0 0 1.6em;text-align:left;letter-spacing:.02em}
 .dr-text h3{font-size:1.1em;font-weight:600;margin:1.6em 0 .8em;text-align:left}
 .dr-text p{margin:0 0 .55em;text-indent:2em}
+.dr-fold{margin:-.25em 0 .7em}
+.dr-fold-toggles{display:flex;gap:1.2em;padding-left:2em;user-select:none;-webkit-user-select:none}
+.dr-fold-toggles button{border:0;background:transparent;padding:0;font:inherit;font-size:.72em;letter-spacing:.06em;color:var(--dr-muted,var(--dsw-alias-label-tertiary));cursor:pointer}
+.dr-fold-toggles button:hover,.dr-fold-toggles button[aria-expanded="true"]{color:var(--dr-fg,var(--dsw-alias-label-secondary))}
+.dr-fold-toggles em{font-style:normal;color:var(--dr-hl-line)}
+.dr-fold-body{margin:.35em 0 .2em;padding:.55em .9em .05em;border-left:2px solid var(--dr-line,rgba(0,0,0,.1));border-radius:0 8px 8px 0;background:var(--dr-chip,rgba(0,0,0,.035));font-size:.9em}
+.dr-fold-body p{text-indent:0}
 .dr-text .dr-meta{text-indent:0;font-size:.78em;color:var(--dr-muted,var(--dsw-alias-label-tertiary));margin-bottom:1.2em}
 .dr-text .dr-end{text-align:center;text-indent:0;margin-top:3em;font-size:.8em;color:var(--dr-muted,var(--dsw-alias-label-tertiary))}
 .dr-text mark{color:inherit;background:none}
@@ -1327,13 +1334,18 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     const HEADING_LINE = /^(第[0-9零一二三四五六七八九十百千万两〇]+[章回节卷集部篇]|序章|序言|楔子|引子|尾声|后记|番外)/
     const META_LINE = /^(作品)?(作者|更新|更新时间|字数|本章字数|首发)[:：]/
 
+    /** A fold fence line: `::: 标签` opens a fold, a bare `:::` closes it (see README「折叠块」). */
+    const FENCE = /^:::[ \t\u3000]*(.*)$/
+
     /**
      * Turn a chapter file into display blocks. Source TXT carries its own indentation (spaces or 　),
      * CRLF and stray blank lines; the reader drops all of that and sets its own indent and spacing.
-     * Each block keeps its offset in the file, so an agent quote can be found again.
+     * Each block keeps its offset in the file, so an agent quote can be found again. Lines between
+     * fences become a `fold` block (label + children) hung under the paragraph before it; folds do not nest.
      */
     function blocks(text, title) {
       const out = []
+      let fold = null
       let at = 0
       for (const raw of text.split('\n')) {
         const start = at
@@ -1341,14 +1353,23 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         const lead = raw.length - raw.replace(/^[\s\u3000]+/, '').length
         const line = raw.replace(/^[\s\u3000]+|[\s\u3000]+$/g, '')
         if (!line) continue
+        const fence = FENCE.exec(line)
+        if (fence) {
+          fold = fence[1] ? { kind: 'fold', label: fence[1], at: start + lead, children: [] } : null
+          if (fold) out.push(fold)
+          continue
+        }
         if (out.length === 0 && start === 0) continue // the file's own heading line; the title is shown above
-        if (line === title || (line.length >= 4 && title.endsWith(line))) continue
+        if (!fold && (line === title || (line.length >= 4 && title.endsWith(line)))) continue
         const kind = META_LINE.test(line) || (line.includes('更新') && line.includes('字数')) ? 'meta'
-          : HEADING_LINE.test(line) && line.length <= 30 ? 'sub' : 'p'
-        out.push({ kind, text: line, at: start + lead })
+          : !fold && HEADING_LINE.test(line) && line.length <= 30 ? 'sub' : 'p'
+        ;(fold ? fold.children : out).push({ kind, text: line, at: start + lead })
       }
-      return out
+      return out.filter((block) => block.kind !== 'fold' || block.children.length > 0)
     }
+
+    /** The file span a fold covers, from its first paragraph to the end of its last. */
+    const foldRange = (fold) => ({ start: fold.children[0].at, end: fold.children.at(-1).at + fold.children.at(-1).text.length })
 
     /**
      * Where a quote sits in the chapter file now: its saved offset if the text there still matches,
@@ -1381,47 +1402,72 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
      * Render blocks with their spans. Each block carries `data-at` (its file offset), so a selection maps
      * back to file offsets; a span crossing paragraphs is drawn piece by piece in each block it covers.
      */
-    function renderBlocks(list, spans) {
-      return list.map((block, i) => {
-        const tag = block.kind === 'sub' ? 'h3' : 'p'
-        const props = { key: i, className: block.kind === 'meta' ? 'dr-meta' : undefined, 'data-at': block.at }
-        const end = block.at + block.text.length
-        const mine = spans.filter((span) => span.start < end && span.end > block.at)
-        if (mine.length === 0) return h(tag, props, block.text)
-        const cuts = [...new Set([block.at, end, ...mine.flatMap((span) => [span.start, span.end]).filter((x) => x > block.at && x < end)])].sort((a, b) => a - b)
-        const parts = []
-        for (let k = 0; k < cuts.length - 1; k += 1) {
-          const from = cuts[k]
-          const to = cuts[k + 1]
-          const piece = block.text.slice(from - block.at, to - block.at)
-          const over = mine.filter((span) => span.start <= from && span.end >= to)
-          if (over.length === 0) { parts.push(piece); continue }
-          const marks = over.filter((span) => span.id)
-          const anchor = over.find((span) => span.anchor)
-          parts.push(h('mark', {
-            key: `${from}:${anchor?.nonce ?? ''}`,
-            className: [marks.length && 'dr-hl', marks.length && marks.every((m) => m.by === 'agent') && 'dr-hl-agent', anchor && 'dr-flash'].filter(Boolean).join(' '),
-            'data-ids': marks.map((m) => m.id).join(' ') || undefined,
-            'data-dr-anchor': anchor ? '' : undefined,
-          }, piece))
-          // A highlight with a note ends in a small mark; it is not text, so selections skip it.
-          for (const m of marks) {
-            if (m.note && m.end === to) parts.push(h('span', { key: `n${m.id}`, className: 'dr-hl-note', 'data-dr-skip': '', 'data-ids': m.id, title: m.note }, h(Icon, { name: 'note', size: 12 })))
-          }
+    function renderBlocks(list, spans, folds) {
+      const out = []
+      for (let i = 0; i < list.length; i += 1) {
+        if (list[i].kind !== 'fold') { out.push(renderBlock(list[i], i, spans)); continue }
+        // Folds in a row (白话, then 注) share one line of toggles; open bodies follow in order.
+        const run = []
+        while (list[i]?.kind === 'fold') run.push(list[i++])
+        i -= 1
+        out.push(h('div', { key: `f${run[0].at}`, className: 'dr-fold' },
+          h('div', { className: 'dr-fold-toggles', 'data-dr-skip': '' }, run.map((fold) => {
+            const open = folds.isOpen(fold.at)
+            const { start, end } = foldRange(fold)
+            const marked = spans.filter((span) => span.id && span.start < end && span.end > start).length
+            return h('button', { key: fold.at, type: 'button', 'aria-expanded': open, onClick: () => folds.toggle(fold.at) },
+              fold.label, h('span', null, open ? ' ▴' : ' ▾'), marked && !open ? h('em', null, ` · ${marked} 处划线`) : null)
+          })),
+          run.filter((fold) => folds.isOpen(fold.at)).map((fold) =>
+            h('div', { key: fold.at, className: 'dr-fold-body', 'data-label': fold.label }, fold.children.map((child, k) => renderBlock(child, k, spans))))))
+      }
+      return out
+    }
+
+    function renderBlock(block, i, spans) {
+      const tag = block.kind === 'sub' ? 'h3' : 'p'
+      const props = { key: i, className: block.kind === 'meta' ? 'dr-meta' : undefined, 'data-at': block.at }
+      const end = block.at + block.text.length
+      const mine = spans.filter((span) => span.start < end && span.end > block.at)
+      if (mine.length === 0) return h(tag, props, block.text)
+      const cuts = [...new Set([block.at, end, ...mine.flatMap((span) => [span.start, span.end]).filter((x) => x > block.at && x < end)])].sort((a, b) => a - b)
+      const parts = []
+      for (let k = 0; k < cuts.length - 1; k += 1) {
+        const from = cuts[k]
+        const to = cuts[k + 1]
+        const piece = block.text.slice(from - block.at, to - block.at)
+        const over = mine.filter((span) => span.start <= from && span.end >= to)
+        if (over.length === 0) { parts.push(piece); continue }
+        const marks = over.filter((span) => span.id)
+        const anchor = over.find((span) => span.anchor)
+        parts.push(h('mark', {
+          key: `${from}:${anchor?.nonce ?? ''}`,
+          className: [marks.length && 'dr-hl', marks.length && marks.every((m) => m.by === 'agent') && 'dr-hl-agent', anchor && 'dr-flash'].filter(Boolean).join(' '),
+          'data-ids': marks.map((m) => m.id).join(' ') || undefined,
+          'data-dr-anchor': anchor ? '' : undefined,
+        }, piece))
+        // A highlight with a note ends in a small mark; it is not text, so selections skip it.
+        for (const m of marks) {
+          if (m.note && m.end === to) parts.push(h('span', { key: `n${m.id}`, className: 'dr-hl-note', 'data-dr-skip': '', 'data-ids': m.id, title: m.note }, h(Icon, { name: 'note', size: 12 })))
         }
-        return h(tag, props, ...parts)
-      })
+      }
+      return h(tag, props, ...parts)
     }
 
     /** File offset of a DOM selection point inside the article, or null when it is outside the text. */
     function pointOffset(article, node, offset) {
-      if (node === article) {
-        // Between blocks (e.g. a triple-click): the next block's start.
-        for (const child of [...article.children].slice(offset)) if (child.dataset.at !== undefined) return Number(child.dataset.at)
+      const element = node.nodeType === 1 ? node : node.parentElement
+      if (!element || !article.contains(element)) return null
+      if (node.nodeType === 1 && !node.closest('[data-at]')) {
+        // Between blocks (a triple-click, or around a fold): the next block's start.
+        for (const child of [...node.children].slice(offset)) {
+          const next = child.matches('[data-at]') ? child : child.querySelector('[data-at]')
+          if (next) return Number(next.dataset.at)
+        }
         return null
       }
-      const block = (node.nodeType === 1 ? node : node.parentElement)?.closest('[data-at]')
-      if (!block || !article.contains(block)) return null
+      const block = element.closest('[data-at]')
+      if (!block) return null
       const range = document.createRange()
       range.setStart(block, 0)
       range.setEnd(node, offset)
@@ -1448,7 +1494,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     }
 
     /** A quote as plain lines, without the book's indentation. */
-    const plainQuote = (quote) => quote.split('\n').map((line) => line.replace(/^[\s\u3000]+|[\s\u3000]+$/g, '')).filter(Boolean).join('\n')
+    const plainQuote = (quote) => quote.split('\n').map((line) => line.replace(/^[\s\u3000]+|[\s\u3000]+$/g, '')).filter((line) => line && !FENCE.test(line)).join('\n')
 
     /** Floats above `rect` (or below it near the top of the window). */
     function Floating({ rect, below, className, children }) {
@@ -1679,7 +1725,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       hei: { name: '黑体', stack: 'var(--dsh-font-family-text,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif)' },
     }
     const WIDTHS = { narrow: { name: '窄', em: 30 }, medium: { name: '中', em: 36 }, wide: { name: '宽', em: 44 } }
-    const TYPE_DEFAULTS = { theme: 'auto', font: 'song', size: 18, leading: 1.9, width: 'medium' }
+    const FOLDS = { closed: { name: '收起' }, open: { name: '展开' } }
+    const TYPE_DEFAULTS = { theme: 'auto', font: 'song', size: 18, leading: 1.9, width: 'medium', folds: 'closed' }
     const TYPE_KEY = 'dsh-reader:typography'
 
     /** Reading preferences live in this browser (like any e-reader); storage may be unavailable, so never rely on it. */
@@ -1734,7 +1781,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
     }
 
     /** The Aa panel: theme, font, size, line height and width for the reading surface. */
-    function TypographyPanel({ onClose }) {
+    function TypographyPanel({ onClose, folds }) {
       const t = useTypography()
       useEffect(() => {
         const onKey = (event) => { if (event.key === 'Escape') onClose() }
@@ -1758,6 +1805,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('div', { className: 'dr-aa-row' }, h('span', null, '行距'),
             h(Stepper, { value: t.leading, min: 1.4, max: 2.6, step: 0.1, format: (v) => v.toFixed(1), onChange: (leading) => typography.set({ leading }) })),
           h('div', { className: 'dr-aa-row' }, h('span', null, '页宽'), seg(WIDTHS, 'width')),
+          // Only for books with ::: folds (白话, 注…): how they start out in each chapter.
+          folds ? h('div', { className: 'dr-aa-row' }, h('span', null, '折叠'), seg(FOLDS, 'folds')) : null,
           h('div', { className: 'dr-aa-foot' }, h('span', null, '只保存在这台浏览器'),
             h('button', { type: 'button', onClick: () => typography.set(null) }, '恢复默认'))))
     }
@@ -1791,13 +1840,27 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
       }, [bookId, index])
       // Reload on the agent's add/remove (binding.marks) and on our own changes.
       useEffect(() => { rpc('highlights', { bookId }).then(setMarks, () => setMarks({ highlights: [], notes: [] })) }, [bookId, binding.marks, marksVersion])
-      // Bring the agent's passage to the middle of the page once its chapter is on screen.
-      useEffect(() => {
-        if (chapter === null || chapter.index !== index || !anchor) return
-        page.current?.querySelector('[data-dr-anchor]')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-      }, [chapter, anchor?.nonce])
       const ready = chapter !== null && chapter.index === index
       const text = ready ? chapter.text : ''
+      const list = ready ? blocks(text, chapter.title) : []
+      // Folds start as the Aa setting says; `flipped` holds the ones the reader turned the other way.
+      const [flipped, setFlipped] = useState(() => new Set())
+      useEffect(() => setFlipped(new Set()), [bookId, index, t.folds])
+      const folds = {
+        isOpen: (at) => (t.folds === 'open') !== flipped.has(at),
+        toggle: (at) => setFlipped((set) => { const next = new Set(set); next.has(at) ? next.delete(at) : next.add(at); return next }),
+      }
+      // Bring the agent's passage to the middle of the page once its chapter is on screen, opening
+      // the fold it sits in first.
+      const scrolled = useRef(null)
+      useEffect(() => {
+        if (!ready || !anchor || scrolled.current === anchor.nonce) return
+        const found = page.current?.querySelector('[data-dr-anchor]')
+        if (found) { scrolled.current = anchor.nonce; found.scrollIntoView({ block: 'center', behavior: 'smooth' }); return }
+        const start = findQuote(text, anchor)
+        const fold = list.find((block) => block.kind === 'fold' && !folds.isOpen(block.at) && foldRange(block).start <= start && start < foldRange(block).end)
+        if (fold) folds.toggle(fold.at)
+      }, [ready, chapter, anchor?.nonce, flipped])
       // Follow the text selection; selectionchange also covers touch and keyboard selections.
       useEffect(() => {
         if (!ready) return
@@ -1861,7 +1924,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           h('article', { className: 'dr-text', ref: article, onClick: onArticleClick },
             !ready ? h('p', { className: 'dr-meta' }, '读取中…') : [
               h('h2', { key: 't' }, current?.full ?? chapter.title),
-              ...renderBlocks(blocks(text, chapter.title), spans),
+              ...renderBlocks(list, spans, folds),
               h('p', { key: 'end', className: 'dr-end' }, index >= count - 1 ? '全书完' : `本节完 · 下一节「${toc ? tocRows(toc.chapters)[index + 1]?.name ?? '' : ''}」`),
             ])),
         selection && !card ? h(Floating, { rect: selection.rect, below: selection.last, className: 'dr-tools' },
@@ -1897,7 +1960,7 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         }) : null,
         failure ? h('div', { className: 'dr-toast', role: 'alert', onClick: () => setFailure(null) }, failure) : null,
         drawer ? h(TocDrawer, { rpc, bookId, index, agentIndex, highlights, notes, saveNote, removeNote, onPick: onMove, onLocate, onClose: () => setDrawer(false) }) : null,
-        panel ? h(TypographyPanel, { onClose: () => setPanel(false) }) : null)
+        panel ? h(TypographyPanel, { onClose: () => setPanel(false), folds: list.some((block) => block.kind === 'fold') }) : null)
     }
 
     /**

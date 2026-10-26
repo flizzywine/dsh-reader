@@ -52,12 +52,28 @@ export function decode(buffer) {
 
 const countChars = (text) => text.replace(/\s/g, '').length
 
-/** Cut text at paragraph breaks into pieces of about `size` characters. */
+/**
+ * Where a piece of about `size` may end: the last paragraph break before it that is outside a
+ * `:::` fold and not just before one (a fold belongs to the paragraph above it), else any break.
+ */
+function cutAt(text, size) {
+  let best = -1
+  let inFold = false
+  for (let at = text.indexOf('\n'); at >= 0 && at <= size; at = text.indexOf('\n', at + 1)) {
+    const line = text.slice(at + 1, text.indexOf('\n', at + 1) >>> 0).trim()
+    if (!inFold && !line.startsWith(':::') && at > size / 2) best = at
+    if (line.startsWith(':::')) inFold = line.length > 3
+  }
+  if (best >= 0) return best
+  return text.lastIndexOf('\n', size) > size / 2 ? text.lastIndexOf('\n', size) : size
+}
+
+/** Cut text at paragraph breaks into pieces of about `size` characters, never inside a fold. */
 function chunk(text, size) {
   const pieces = []
   let rest = text
   while (rest.length > size * 1.5) {
-    const cut = rest.lastIndexOf('\n', size) > size / 2 ? rest.lastIndexOf('\n', size) : size
+    const cut = cutAt(rest, size)
     pieces.push(rest.slice(0, cut))
     rest = rest.slice(cut)
   }
