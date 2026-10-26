@@ -179,6 +179,10 @@ body{--dr-solid:linear-gradient(var(--dsw-menu-surface-fill,var(--dsw-alias-bg-b
 .dr-card{display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:color-mix(in srgb,currentColor 6%,transparent)}
 .dr-card-on{outline:1px solid var(--dsw-alias-border-l2)}
 .dr-card-text{flex:1;min-width:0}
+/* The whole card opens the book in 开始阅读. */
+.dr-card-pickable{width:100%;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dr-card-pickable:hover:not(:disabled){background:color-mix(in srgb,currentColor 10%,transparent)}
+.dr-card-pickable:disabled{cursor:default}
 .dr-card-title{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dr-card-link{border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:0;cursor:pointer}
 .dr-card-link:hover .dr-card-title{text-decoration:underline;text-underline-offset:3px}
@@ -867,12 +871,10 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
           error ? h('p', { className: 'dr-error' }, error)
             : books === null ? h('p', { className: 'dr-note' }, '读取中…')
               : books.length === 0 ? h('p', { className: 'dr-note' }, '书库是空的，先导入一本 TXT、EPUB 或 PDF。')
-                : h(BookBrowser, { app, books, groups, listClass: 'dr-dialog-list', card: (b) => h('div', { key: b.id, className: 'dr-card' },
+                : h(BookBrowser, { app, books, groups, listClass: 'dr-dialog-list', card: (b) => h('button', { key: b.id, type: 'button', className: 'dr-card dr-card-pickable', disabled: starting !== null, onClick: () => start(b.id) },
                     h('div', { className: 'dr-card-text' },
                       h('div', { className: 'dr-card-title' }, b.title),
-                      h('div', { className: 'dr-card-meta' }, `${b.chars.toLocaleString()} 字 · ${b.chapters} 节${archivedTag(b)}`)),
-                    h('button', { type: 'button', className: 'dr-btn dr-btn-line', disabled: starting !== null, onClick: () => start(b.id) },
-                      starting === b.id ? '正在打开…' : '开始阅读')) }))), document.body)
+                      h('div', { className: 'dr-card-meta' }, starting === b.id ? '正在打开…' : `${b.chars.toLocaleString()} 字 · ${b.chapters} 节${archivedTag(b)}`))) }))), document.body)
     }
 
     /** Small line icons (16px, currentColor) for the sidebar. */
