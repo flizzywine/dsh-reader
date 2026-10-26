@@ -1937,7 +1937,8 @@ body.dsh-reader-shell-active [class*="_root"]:not([class*="_collapsed"]):has(>[c
         return () => controller.abort()
       }, [sessionId])
 
-      const reading = sessionId !== undefined && binding?.bookId
+      // A boolean, not the id: renaming or switching the book must not count as starting to read.
+      const reading = sessionId !== undefined && Boolean(binding?.bookId)
       // On a phone the side panel goes fullscreen, so let the reader stay in front until asked.
       useEffect(() => { if (reading && !NARROW.matches) app.openChat() }, [reading, sessionId])
 
